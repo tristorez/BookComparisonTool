@@ -1,9 +1,10 @@
+import type { GameKey } from '@shared/wire';
 import { useConnection, useGames, useLoaded } from '../lib/store';
 import type { View } from '../lib/view';
 import { GameRow } from './GameRow';
 
 /** Live games first, then one section per kickoff date (US Eastern). Games without quotes are hidden. */
-export function Board({ view }: { view: View }) {
+export function Board({ view, onOpenGame }: { view: View; onOpenGame?: (game: GameKey) => void }) {
   const groups = useGames();
   const loaded = useLoaded();
   const { state } = useConnection();
@@ -22,7 +23,7 @@ export function Board({ view }: { view: View }) {
               </span>
             </h2>
             {g.games.map((game) => (
-              <GameRow key={game.key} game={game} view={view} />
+              <GameRow key={game.key} game={game} view={view} onOpen={onOpenGame} />
             ))}
           </section>
         ))

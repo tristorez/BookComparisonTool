@@ -1,8 +1,9 @@
 import { Board } from './components/Board';
+import { GameDetail } from './components/GameDetail';
 import { Header } from './components/Header';
 import { StaleBanner } from './components/StaleBanner';
 import { useBooks } from './lib/store';
-import { resolveView, useViewParam } from './lib/view';
+import { resolveView, useGameParam, useViewParam } from './lib/view';
 
 const listFormat = new Intl.ListFormat('en', { type: 'conjunction' });
 
@@ -10,19 +11,20 @@ export function App() {
   const books = useBooks();
   const [requested, setView] = useViewParam();
   const view = resolveView(requested, books);
+  const { game, open, close } = useGameParam();
   const regions = [...new Set(books.map((b) => b.region).filter((r): r is string => !!r))];
   return (
     <div className="min-h-dvh bg-navy-950 text-ink">
       <a
-        href="#board"
+        href="#content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-navy-950"
       >
-        Skip to the board
+        Skip to the odds
       </a>
-      <Header view={view} onView={setView} />
+      <Header view={view} onView={setView} showToggle={game === null} />
       <StaleBanner />
-      <main className="mx-auto max-w-5xl px-3 pt-4 pb-10 sm:px-6">
-        <Board view={view} />
+      <main id="content" className="mx-auto max-w-5xl px-3 pt-4 pb-10 sm:px-6">
+        {game === null ? <Board view={view} onOpenGame={open} /> : <GameDetail gameKey={game} onBack={close} />}
       </main>
       <footer className="mx-auto max-w-5xl px-4 pb-10 text-xs leading-relaxed text-faint sm:px-6">
         <p>

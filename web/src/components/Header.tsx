@@ -5,7 +5,8 @@ import { ConnectionIndicator } from './ConnectionIndicator';
 import { LogoMark } from './icons';
 import { ViewToggle } from './ViewToggle';
 
-export function Header({ view, onView }: { view: View; onView: (view: View) => void }) {
+/** `showToggle` is off on a game's comparison page, which lists every book anyway. */
+export function Header({ view, onView, showToggle = true }: { view: View; onView: (view: View) => void; showToggle?: boolean }) {
   const books = useBooks();
   return (
     <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-navy-950/90 backdrop-blur-md">
@@ -18,7 +19,7 @@ export function Header({ view, onView }: { view: View; onView: (view: View) => v
           <ConnectionIndicator />
         </div>
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <ViewToggle books={books} view={view} onChange={onView} />
+          {showToggle && <ViewToggle books={books} view={view} onChange={onView} />}
           {books.length > 0 && (
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Sportsbook status">
               {books.map((b) => (

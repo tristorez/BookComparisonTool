@@ -11,7 +11,7 @@ PURPOSE
 
 HOW TO READ IT
   - Start with the INDEX: it maps each section of the PDF to the decisions that answer it.
-  - Then one block per decision, D-01 to D-40, in ID order. IDs are stable and never reused.
+  - Then one block per decision, D-01 to D-41, in ID order. IDs are stable and never reused.
   - Block fields:
       Status        state and date (legend below) | PDF section it answers | Owner
       Context       the problem and its constraints
@@ -59,7 +59,7 @@ INDEX: assignment PDF section -> the decisions that answer it
 
 GOAL / SCOPE
   Main lines (moneyline, spread, total), pregame and live ........ D-01
-  Two books side by side from day one ............................ D-17, D-21, D-28
+  Two books side by side from day one ............................ D-17, D-21, D-28, D-41
   Best available price, book name underneath ..................... D-21, D-22, D-23, D-30
   Toggle at the top: Best Price | DraftKings | FanDuel ........... D-28
   Updates pushed to the browser, no refresh button ............... D-06, D-07, D-08
@@ -188,22 +188,22 @@ Where:        web/src/components/PriceCell.tsx; D-29.
 
 ----------------------------------------------------------------------------------------------------
 D-03  Jurisdiction: New Jersey for both books (DK region unverified)
-Status: Accepted 2026-10-19; revised 2026-10-19 after region tests | PDF: Goal / Scope; Key Concept 3 | Owner: user
+Status: Accepted, revised 2026-10-19 (region tests) | PDF: Goal / Scope; Key Concept 3 | Owner: user
 Context:      Both books name a jurisdiction per request (FD market ids: NJ 734.x, Missouri 729.x;
               DK site dkusnj, socket host sportsbook-ws-us-nj). A comparison should read both books
               for the same region. Reviewers are likely in Canada, where Ontario lines are on offer.
 Decision:     NJ for both books (DK_STATE=nj, FD_REGION=nj: both connectors' default, and
               configurable). The README's "Viewing and running from Canada" note says:
               - The live URL works from Canada; the browser only talks to our server.
-              - FanDuel game lines and props are identical in NJ, 12 other states, Ontario and Alberta,
-                so a reviewer's Ontario FD app should show the same prices for the markets we show.
+              - FanDuel game lines and props are identical in NJ, 11 other states, Ontario and
+                Alberta, so a reviewer's Ontario FD app should match for what we show.
               - DraftKings ignores the site name, so we cannot choose or confirm its region.
               - Canadian IPs are not blocked from an AWS Canada instance; a home or VPS address may
                 still be (untested). Then use `npm run dev:remote` or `BOOKS=fake`.
-Alternatives: - Ontario column: rejected. FD prices are identical to NJ for everything we display, DK
-                cannot be pointed at Ontario, so a second column would repeat NJ's numbers.
+Alternatives: - Ontario column: rejected. FD prices are identical to NJ for everything we display
+                and DK cannot be pointed at Ontario, so a second column would repeat NJ's numbers.
               - A different state per book: rejected; DK cannot be pointed at one anyway.
-Evidence:     Measured 2026-10-19 from AWS Ohio, US-east-1 and Canada (Montréal): README FD-16
+Evidence:     Measured 2026-10-19 from AWS Ohio, US-east-1 and Canada (Montreal): README FD-16
               (25 US jurisdictions + Ontario + Alberta reachable; 90/90 game-line runners and an
               event page's props identical), DK-17 (REST and socket ignore the site name, even a
               bogus "zz"), FD-9 (no state or country geofence), FD-3 (id namespaces).
@@ -1298,6 +1298,34 @@ Revisit if:   A drill needs per-feed source lag or dropped frames (only link lag
 Where:        src/server/fake.ts, test/fake.test.ts, scripts/drills.ts, scripts/load-sse.ts;
               README "The board: two feeds, one view", "Running the app".
 
+----------------------------------------------------------------------------------------------------
+D-41  A game page for the side-by-side comparison; the board stays one best price per side
+Status: Accepted 2026-10-19 | PDF: Goal / Scope | Owner: user
+Context:      The brief: normalize both books and show them "as a side-by-side comparison". The
+              board showed each side's best price and book, with the other book only muted under
+              it, so the comparison was partial. A column per book per market on the board would
+              be cramped on a phone and grow with every book.
+Decision:     - The board stays as it is: per side, the best price and its book.
+              - Clicking a game (or its Compare link) opens ?game=<key>: per market, a table with
+                a column per book from the server's book list, a Best column naming the book and
+                how the pick was made, the best price starred in its book's column, each book's
+                hold (the implied probabilities of its two prices minus 100%), and the reasoning
+                for picks across different lines written out.
+              - It is a history entry: Back returns to the board at the same scroll position. The
+                view toggle hides there, since every book is listed.
+              - Cells reuse the book view's cell: the same flash, previous price and hatching.
+Alternatives: - Book columns on the board itself: the user chose to keep the board simple.
+              - A modal or an expanding row: rejected; a page has its own URL, can be shared, and
+                works with Back.
+Evidence:     web/src/components/GameDetail.test.tsx (a column per book, the star, the Best
+              column, holds, notes, a live flash, a direct link, Back restoring the board's
+              scroll); web/src/lib/odds.test.ts (marketHold).
+Trade-offs:   One more click to see every book; the board keeps the muted other price as a hint.
+Revisit if:   Viewers want the full comparison on the board itself (e.g. a desktop-only layout).
+Where:        web/src/components/GameDetail.tsx, web/src/components/GameRow.tsx (Compare link,
+              card click), web/src/lib/view.ts (useGameParam), web/src/lib/odds.ts (marketHold);
+              README "The UI".
+
 ====================================================================================================
-END OF LOG. New decisions get the next free ID (D-41 onward), a row in the INDEX, and a date.
+END OF LOG. New decisions get the next free ID (D-42 onward), a row in the INDEX, and a date.
 ====================================================================================================

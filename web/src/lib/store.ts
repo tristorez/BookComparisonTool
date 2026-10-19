@@ -473,6 +473,12 @@ export function useLoaded(): boolean {
   return useTopic(s, TOPIC_GAMES, s.isLoaded);
 }
 
+/** One game by key: undefined before a snapshot names it, or after it leaves the board. */
+export function useGame(key: GameKey): WireGame | undefined {
+  const s = useStore();
+  return useTopic(s, TOPIC_GAMES, () => s.getGame(key));
+}
+
 /** The best pick for one game/market/side, plus the move of its displayed value. */
 export function useCell(game: GameKey, market: MarketType, side: Side): CellState {
   const s = useStore();

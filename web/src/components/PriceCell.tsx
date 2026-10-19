@@ -38,6 +38,8 @@ export interface PriceCellProps {
   gameLive: boolean;
   gameSuspect: boolean;
   align?: TipAlign;
+  /** Comparison layout: every book has its own column, so the Best cell shows only the pick. */
+  compare?: boolean;
 }
 
 /**
@@ -63,12 +65,12 @@ function bookName(books: readonly WireBookMeta[], id: BookId): string {
 
 // ---- Best Price view -------------------------------------------------------------------------------
 
-function BestCell({ game, market, side, gameLive, gameSuspect, align = 'center' }: PriceCellProps) {
+function BestCell({ game, market, side, gameLive, gameSuspect, align = 'center', compare = false }: PriceCellProps) {
   const { best, move } = useCell(game, market, side);
   const books = useBooks();
   const fresh = useFreshMove(move);
   const pick = isPick(best) ? best : undefined;
-  const others = pick === undefined ? books : books.filter((b) => !pick.books.includes(b.id));
+  const others = compare ? [] : pick === undefined ? books : books.filter((b) => !pick.books.includes(b.id));
   return (
     <div className="flex flex-col items-center gap-0.5 text-center" data-cell="best">
       {pick !== undefined ? (

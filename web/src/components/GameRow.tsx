@@ -1,20 +1,41 @@
-import { memo } from 'react';
+import { memo, type MouseEvent } from 'react';
 import type { MarketType } from '@shared/domain';
-import type { WireGame } from '@shared/wire';
+import type { GameKey, WireGame } from '@shared/wire';
 import { formatKickoff, nickname } from '../lib/format';
 import { MARKETS, MARKET_SIDES } from '../lib/shared';
-import type { View } from '../lib/view';
+import { gameHref, isPlainClick, type View } from '../lib/view';
+import { ChevronRightIcon } from './icons';
 import { PriceCell } from './PriceCell';
 import { Tip } from './Tip';
 
-const MARKET_LABEL: Record<MarketType, string> = { spread: 'Spread', total: 'Total', moneyline: 'Moneyline' };
+export const MARKET_LABEL: Record<MarketType, string> = { spread: 'Spread', total: 'Total', moneyline: 'Moneyline' };
 const ROWS = [0, 1] as const; // away/over on top, home/under below
 
-/** One game: kickoff (or LIVE), away above home, Spread | Total | Moneyline. */
-export const GameRow = memo(function GameRow({ game, view }: { game: WireGame; view: View }) {
+interface GameRowProps {
+  game: WireGame;
+  view: View;
+  /** Opens the game's side-by-side comparison of every book. */
+  onOpen?: (game: GameKey) => void;
+}
+
+/** One game: kickoff (or LIVE), away above home, Spread | Total | Moneyline. Clicking it compares the books. */
+export const GameRow = memo(function GameRow({ game, view, onOpen }: GameRowProps) {
   const suspect = game.suspect === true;
+  // The whole card opens the comparison; links and tooltip triggers inside it keep their own clicks,
+  // and so does selecting text.
+  const onCardClick = (e: MouseEvent<HTMLElement>): void => {
+    if (onOpen === undefined || !isPlainClick(e)) return;
+    if ((e.target as Element).closest('a, button, [tabindex]')) return;
+    if (window.getSelection()?.isCollapsed === false) return;
+    onOpen(game.key);
+  };
   return (
-    <article aria-label={`${game.awayName} at ${game.homeName}`} className="rounded-xl bg-navy-900 ring-1 ring-white/[0.06]" data-game={game.key}>
+    <article
+      aria-label={`${game.awayName} at ${game.homeName}`}
+      className={`rounded-xl bg-navy-900 ring-1 ring-white/[0.06] ${onOpen ? 'cursor-pointer transition-shadow hover:ring-white/[0.16]' : ''}`}
+      data-game={game.key}
+      onClick={onCardClick}
+    >
       <table className="w-full table-fixed border-collapse">
         <colgroup>
           <col className="w-[27%] sm:w-[32%]" />
@@ -34,6 +55,7 @@ export const GameRow = memo(function GameRow({ game, view }: { game: WireGame; v
                   </time>
                 )}
                 {suspect && <SuspectBadge />}
+                {onOpen && <CompareLink game={game} onOpen={onOpen} />}
               </span>
             </th>
             {MARKETS.map((m) => (
@@ -70,7 +92,26 @@ export const GameRow = memo(function GameRow({ game, view }: { game: WireGame; v
   );
 });
 
-function TeamName({ code, name }: { code: string; name: string }) {
+function CompareLink({ game, onOpen }: { game: WireGame; onOpen: (game: GameKey) => void }) {
+  return (
+    <a
+      href={gameHref(game.key)}
+      onClick={(e) => {
+        if (!isPlainClick(e)) return;
+        e.preventDefault();
+        onOpen(game.key);
+      }}
+      aria-label={`Compare every book: ${game.awayName} at ${game.homeName}`}
+      data-compare
+      className="inline-flex items-center gap-0.5 rounded-sm text-[11px] font-medium text-accent/90 outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/70"
+    >
+      <span className="hidden sm:inline">Compare</span>
+      <ChevronRightIcon className="size-3.5" />
+    </a>
+  );
+}
+
+export function TeamName({ code, name }: { code: string; name: string }) {
   return (
     <span className="flex min-w-0 flex-col sm:flex-row sm:items-baseline sm:gap-2">
       <span className="text-sm font-bold text-ink">{code}</span>
@@ -82,7 +123,7 @@ function TeamName({ code, name }: { code: string; name: string }) {
   );
 }
 
-function LiveBadge() {
+export function LiveBadge() {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold tracking-wider text-rose-300 uppercase ring-1 ring-rose-400/30">
       <span aria-hidden="true" className="size-1.5 animate-pulse rounded-full bg-rose-400" />
@@ -91,7 +132,7 @@ function LiveBadge() {
   );
 }
 
-function SuspectBadge() {
+export function SuspectBadge() {
   return (
     <Tip
       align="start"

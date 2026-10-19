@@ -80,7 +80,7 @@ builds on Box A and rolls out to both boxes (`deploy/` has the systemd units and
 in a gitignored `deploy/hosts.env`).
 
 **Viewing and running from Canada.** The live URL works from anywhere. Its prices are both books' **New
-Jersey** lines. We measured FanDuel NJ, 12 other states, Ontario and Alberta: the game lines and
+Jersey** lines. We measured FanDuel NJ, 11 other states, Ontario and Alberta: the game lines and
 props are identical ([FD-16](#fd-16-every-region-prices-the-games-the-same)), so the Ontario lines in the app
 should match for these markets. DraftKings ignores the jurisdiction name altogether
 ([DK-17](#dk-17-the-jurisdiction-name-is-ignored-so-we-cannot-choose-a-draftkings-region)), so we can't say
@@ -350,7 +350,7 @@ trade-offs and what would change our mind, is [Decisions.txt](Decisions.txt).
       `729.x` for Missouri; DK `dkusnj`), so a fair comparison reads both books for the same state.
     - Reading isn't geofenced per state: our Ohio hosts read NJ from both books.
     - *Update after testing from AWS Canada and US-east-1:* FD's game lines and props were identical in
-      NJ, 12 other states, Ontario and Alberta ([FD-16](#fd-16-every-region-prices-the-games-the-same)), so
+      NJ, 11 other states, Ontario and Alberta ([FD-16](#fd-16-every-region-prices-the-games-the-same)), so
       Ontario lines would add nothing; and DK ignores the jurisdiction name, so "NJ" on the DK side is
       unverified ([DK-17](#dk-17-the-jurisdiction-name-is-ignored-so-we-cannot-choose-a-draftkings-region)).
     - *Rejected:* a separate Ontario column. Canadian IPs are not blocked, but the prices matched.
@@ -771,6 +771,13 @@ unchanged `reason` text).
 - **Best view:** the best line and price with the book underneath (both books on a tie), the `est.` or
   `by line` label beside the book name when the lines differ, and the other book's price shown muted.
 - **Book views:** that book's prices, with ★ where it holds the best price.
+- **Game page (the side-by-side comparison):** click a game, or its **Compare ›** link, to open it
+  (`?game=`, so it can be linked to and Back returns to the board where it was). Each market is a table
+  with one column per book, built from the server's book list like the toggle, plus a **Best** column
+  that names the book. The best price is starred in its book's column. Each book's **hold** (its margin
+  on the market; lower is better for bettors) sits under its column. Picks made across different lines
+  show their reasoning (`est. NO: Est. return per $1: 0.967 vs 0.943`). The board stays simple, one best
+  price and its book per side, and the game page is the full comparison.
 - **Price moves flash** green (better for the bettor) or red, with the previous price struck through for
   5 s. Snapshots, view switches, returning to the tab, reconnect catch-up and eligibility changes never
   flash.
@@ -1136,7 +1143,7 @@ Each entry lists **symptom → diagnosis → resolution**, plus its current stat
     (ak al ca de fl ga hi id me mn ms mt nd ne nh nm nv ok or ri sc sd tx ut wa wi). Canada:
     **`on.sportsbook.fanduel.ca` (Ontario) and `ab.sportsbook.fanduel.ca` (Alberta)** answer; `bc`, `qc`,
     `mb`, `sk`, `ns`, `nb` do not. `.ca` hosts, not `.com`; `smp.` and `pir.` exist for `on` too.
-  - **Game lines are identical.** Moneyline, spread and total: 90 of 90 runners match NJ in 12 other
+  - **Game lines are identical.** Moneyline, spread and total: 90 of 90 runners match NJ in 11 other
     states, Ontario and Alberta, on the cached board; and 90 of 90 on the live SMP endpoint for PA, NY, IL
     and Ontario.
   - **Game props are identical too.** For Chiefs @ Seahawks the event page returned 8 markets and 17

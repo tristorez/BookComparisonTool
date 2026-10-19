@@ -11,6 +11,21 @@ export interface PricePoint {
 }
 
 /**
+ * A book's hold (its margin) on one two-way market: the implied probabilities of both sides minus 1,
+ * so −110 / −110 holds 4.8%. Null unless the two prices form one market (a spread's two halves, or
+ * the same total) and both are real American prices.
+ */
+export function marketHold(market: MarketType, first: PricePoint, second: PricePoint): number | null {
+  const valid = (a: number): boolean => Number.isFinite(a) && Math.abs(a) >= 100;
+  if (!valid(first.american) || !valid(second.american)) return null;
+  if (market !== 'moneyline') {
+    if (first.line === null || second.line === null) return null;
+    if (market === 'spread' ? first.line !== -second.line : first.line !== second.line) return null;
+  }
+  return 1 / americanToDecimal(first.american) + 1 / americanToDecimal(second.american) - 1;
+}
+
+/**
  * Is `to` better for the bettor than `from`? Returns 1 (better), -1 (worse) or 0 (same terms).
  *
  * A line change decides on its own: more points taken / fewer laid on a spread, a lower total for an

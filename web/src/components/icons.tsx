@@ -18,6 +18,22 @@ export function WarningIcon({ className = '' }: IconProps) {
   );
 }
 
+export function ChevronRightIcon({ className = '' }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" className={className}>
+      <path d="M6 3.5 10.5 8 6 12.5" />
+    </svg>
+  );
+}
+
+export function ChevronLeftIcon({ className = '' }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" className={className}>
+      <path d="M10 3.5 5.5 8 10 12.5" />
+    </svg>
+  );
+}
+
 export function LogoMark({ className = '' }: IconProps) {
   return (
     <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" className={className}>

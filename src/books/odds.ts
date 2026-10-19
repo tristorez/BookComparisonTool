@@ -11,10 +11,6 @@ export function parseAmerican(raw: string | number | null | undefined): number |
   return Number.isFinite(n) && n !== 0 ? Math.round(n) : null;
 }
 
-export function americanToDecimal(american: number): number {
-  return american > 0 ? 1 + american / 100 : 1 + 100 / -american;
-}
-
 /** Null for anything that is not a real price (decimal ≤ 1 would otherwise give ±Infinity). */
 export function decimalToAmerican(decimal: number): number | null {
   if (!Number.isFinite(decimal) || decimal <= 1) return null;

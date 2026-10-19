@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import type { Dispatcher } from 'undici';
-import { BROWSER_UA, HttpError, backoffMs, createDispatcher, createWsAgent, isBlocked, requestJson } from './http.js';
-import { americanToDecimal, parseAmerican } from './odds.js';
+import { BROWSER_UA, HttpError, backoffMs, createDispatcher, createWsAgent, errMsg, isBlocked, requestJson } from './http.js';
+import { parseAmerican } from './odds.js';
+import { americanToDecimal } from '../shared/odds.js';
 import { gameKey, resolveTeam, type Team } from './teams.js';
-import { BookConnector, type BookGame, type Channel, type MarketType, type Quote, type QuoteRef, type Side } from './types.js';
+import { BookConnector, quoteRefsFor, type BookGame, type Channel, type MarketType, type Quote, type QuoteRef, type Side } from './types.js';
 
 /**
  * FanDuel connector.
@@ -43,7 +44,6 @@ const GAME_LINE_TYPES: Record<string, MarketType> = {
   'TOTAL_POINTS_(OVER/UNDER)': 'total',
 };
 const RESULT_SIDES: Record<string, Side> = { HOME: 'home', AWAY: 'away', OVER: 'over', UNDER: 'under' };
-const MARKET_SIDES: Record<MarketType, Side[]> = { moneyline: ['away', 'home'], spread: ['away', 'home'], total: ['over', 'under'] };
 
 // FD's own client batches 70 ids per SMP request and 350 per PIR subscription.
 const POLL_BATCH = 70;
@@ -508,9 +508,11 @@ export class FanDuelConnector extends BookConnector {
   }
 
   private retireEmptyEvents(): string[] {
+    const live = new Set<TrackedMarket["eventId"]>();
+    for (const m of this.markets.values()) live.add(m.eventId);
     const removed: string[] = [];
     for (const [eventId, g] of this.events) {
-      if ([...this.markets.values()].some((m) => m.eventId === eventId)) continue;
+      if (live.has(eventId)) continue;
       this.events.delete(eventId);
       removed.push(g.gameKey);
     }
@@ -979,7 +981,7 @@ function sidesOf(m: FdMarket): Map<number, Side> {
 }
 
 function refsFor(m: TrackedMarket): QuoteRef[] {
-  return MARKET_SIDES[m.type].map((side) => ({ gameKey: m.gameKey, market: m.type, side }));
+  return quoteRefsFor(m.gameKey, m.type);
 }
 
 function teamsOf(ev: FdEvent, markets: FdMarket[]): { away: Team; home: Team } | null {
@@ -1004,4 +1006,3 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 
 const b64 = (value: unknown) => encodeURIComponent(Buffer.from(JSON.stringify(value)).toString('base64'));
-const errMsg = (err: unknown) => (err instanceof Error ? err.message : String(err));

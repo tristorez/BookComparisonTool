@@ -89,3 +89,5 @@ export function backoffMs(attempt: number, baseMs = 1_000, maxMs = 30_000): numb
 }
 
 export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+export const errMsg = (err: unknown): string => (err instanceof Error ? err.message : String(err));

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { BookId, Channel, ConnectionState, MarketType, Side } from '../shared/domain.js';
+import { MARKET_SIDES, type BookId, type Channel, type ConnectionState, type MarketType, type Side } from '../shared/domain.js';
 
 // The primitive unions live in src/shared/domain.ts so the browser can use them without node:events.
 export type { BookId, Channel, ConnectionState, MarketType, Side };
@@ -93,6 +93,9 @@ export interface BookSnapshot {
 }
 
 export const quoteKey = (q: QuoteRef): string => `${q.gameKey}|${q.market}|${q.side}`;
+
+/** Every quote slot a market of this type can hold. */
+export const quoteRefsFor = (gameKey: string, market: MarketType): QuoteRef[] => MARKET_SIDES[market].map((side) => ({ gameKey, market, side }));
 
 interface ConnectorEvents {
   change: [BookChange];

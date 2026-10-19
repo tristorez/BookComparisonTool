@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import type { Dispatcher } from 'undici';
-import { BROWSER_UA, backoffMs, createDispatcher, createWsAgent, isBlocked, requestJson, sleep, type JsonResponse } from './http.js';
-import { americanToDecimal, decimalToAmerican, parseAmerican } from './odds.js';
+import { BROWSER_UA, backoffMs, createDispatcher, createWsAgent, errMsg, isBlocked, requestJson, sleep, type JsonResponse } from './http.js';
+import { decimalToAmerican, parseAmerican } from './odds.js';
+import { MARKET_SIDES } from '../shared/domain.js';
+import { americanToDecimal } from '../shared/odds.js';
 import { gameKey, resolveTeam } from './teams.js';
 import {
   BookConnector,
   quoteKey,
+  quoteRefsFor,
   type BookChange,
   type BookGame,
   type Channel,
@@ -110,7 +113,6 @@ const ORPHAN_TTL_MS = 10_000;
 /** DK moves a line as remove(old) then add(new) a few ms apart; keep showing the old line until then. */
 const REPLACEMENT_GRACE_MS = 1_000;
 
-const MARKET_SIDES: Record<MarketType, Side[]> = { moneyline: ['away', 'home'], spread: ['away', 'home'], total: ['over', 'under'] };
 const OUTCOME_SIDES: Record<string, Side> = { Home: 'home', Away: 'away', Over: 'over', Under: 'under' };
 
 interface DkParticipant {
@@ -935,7 +937,7 @@ export class DraftKingsConnector extends BookConnector {
   private refsForMarket(m: DkMarket): QuoteRef[] {
     const type = marketTypeOf(m);
     const game = m.eventId ? this.emittedGames.get(m.eventId) : undefined;
-    return type && game ? MARKET_SIDES[type].map((side) => ({ gameKey: game.gameKey, market: type, side })) : [];
+    return type && game ? quoteRefsFor(game.gameKey, type) : [];
   }
 
   // ---------------------------------------------------------------- plumbing
@@ -1027,4 +1029,3 @@ function definedFields<T extends object>(patch: T): Partial<T> {
   return Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
-const errMsg = (err: unknown) => (err instanceof Error ? err.message : String(err));

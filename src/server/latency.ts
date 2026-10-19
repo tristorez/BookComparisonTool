@@ -7,6 +7,8 @@
 import type { BookId, Channel, FeedId } from '../shared/domain.js';
 import { MAX_BEACON_SAMPLES, type LatencyReport } from '../shared/wire.js';
 
+const CHANNELS = new Set<unknown>(['snapshot', 'push', 'poll'] satisfies Channel[]);
+
 export type Metric =
   | 'bookToServer' // first-copy receive − book timestamp
   | 'serverProcessing' // delta emitted − first-copy receive
@@ -62,6 +64,8 @@ export class LatencyTracker {
   /** First copies delivered per book × feed (which box wins the race). */
   private readonly firstCopies = new Map<string, number>();
   private readonly skewFloor = new Map<BookId, number>();
+  /** Feeds the server itself has seen deliver a first copy; browser beacons may only label these. */
+  private readonly knownFeeds = new Set<FeedId>();
 
   constructor(
     private readonly bookTimeResolutionMs: Partial<Record<BookId, number>> = {},
@@ -79,6 +83,7 @@ export class LatencyTracker {
 
   firstCopy(book: BookId, feed: FeedId): void {
     const key = `${book}|${feed}`;
+    this.knownFeeds.add(feed);
     this.firstCopies.set(key, (this.firstCopies.get(key) ?? 0) + 1);
   }
 
@@ -92,6 +97,11 @@ export class LatencyTracker {
     let n = 0;
     for (const s of report.samples.slice(0, MAX_BEACON_SAMPLES)) {
       if (typeof s !== 'object' || !s || (s.phase !== 'pre' && s.phase !== 'live')) continue;
+      // Labels come from the public internet: only known values may name a series, or arbitrary labels
+      // would create series (each a 5,000-slot reservoir) without bound.
+      if (s.book !== undefined && !Object.hasOwn(this.bookTimeResolutionMs, s.book)) continue; // not `in`: that accepts "constructor"
+      if (s.ch !== undefined && !CHANNELS.has(s.ch)) continue;
+      if (s.feed !== undefined && !this.knownFeeds.has(s.feed)) continue;
       const labels: Labels = { book: s.book, phase: s.phase, channel: s.ch, feed: s.feed };
       const ok = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > -60_000 && v < 600_000;
       if (ok(s.serverToBrowser)) this.record('serverToBrowser', labels, s.serverToBrowser);

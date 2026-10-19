@@ -66,7 +66,7 @@ GOAL / SCOPE
   Live at a public URL ........................................... D-10, D-11, D-38
   One book down or sending garbage; the other keeps updating ..... D-25, D-26, D-33
   The UI makes clear which data is stale ......................... D-25, D-30
-  Which state's prices (NJ); reviewers in Canada ................. D-03
+  Which state's prices (NJ); reviewers in Canada; regions ....... D-03
   Any language, any stack ........................................ D-06, D-24, D-28
 
 KEY CONCEPT 1: SPEED AND LATENCY
@@ -187,32 +187,35 @@ Revisit if:   Reviewers want per-number freshness on screen. The beacon data alr
 Where:        web/src/components/PriceCell.tsx; D-29.
 
 ----------------------------------------------------------------------------------------------------
-D-03  Jurisdiction: New Jersey prices for both books
-Status: Accepted 2026-10-19 | PDF: Goal / Scope; Key Concept 3 | Owner: user
-Context:      Both books price per state, and each state is its own namespace (FD market ids: NJ
-              734.x, Missouri 729.x; DK site dkusnj, socket host sportsbook-ws-us-nj). A
-              comparison is only fair if both books are read for the same state. Reviewers are
-              likely in Canada, where Ontario lines differ.
+D-03  Jurisdiction: New Jersey for both books (DK region unverified)
+Status: Accepted 2026-10-19; revised 2026-10-19 after region tests | PDF: Goal / Scope; Key Concept 3 | Owner: user
+Context:      Both books name a jurisdiction per request (FD market ids: NJ 734.x, Missouri 729.x;
+              DK site dkusnj, socket host sportsbook-ws-us-nj). A comparison should read both books
+              for the same region. Reviewers are likely in Canada, where Ontario lines are on offer.
 Decision:     NJ for both books (DK_STATE=nj, FD_REGION=nj: both connectors' default, and
               configurable). The README's "Viewing and running from Canada" note says:
               - The live URL works from Canada; the browser only talks to our server.
-              - Prices are NJ lines, so a reviewer's own Ontario DK/FD app shows other numbers.
-              - US book APIs are reported to geo-restrict Canadian IPs (unverified; FD-9), so
-                local runs from Canada use `npm run dev:remote` (local UI against the hosted
-                server) or `BOOKS=fake`.
-Alternatives: - Ontario lines: rejected. They need Canadian egress for both books, which gives
-                up the us-east-2 placement next to FD's push origin (D-10), and the connectors
-                were reverse-engineered and verified against the US endpoints.
-              - A different state per book: rejected; it breaks the like-for-like comparison.
-Evidence:     FD reads are not geofenced per state: a Missouri IP reads NJ prices (README FD-9).
-              Per-state namespaces: README FD-3, DK-2. The Canadian-IP block is reported by
-              others; README FD-9 notes we have not verified it ourselves.
-Trade-offs:   Reviewers cannot check our numbers against their own apps. Spot checks need a US
-              vantage point (plan Verification 3).
-Revisit if:   Betstamp wants Ontario lines. That takes a Canadian egress for both books and the
-              CA endpoints (DK-2 found the Alberta variant: dkcaab, sportsbook-ws-ca-ab).
+              - FanDuel game lines and props are identical in NJ, 12 other states, Ontario and Alberta,
+                so a reviewer's Ontario FD app should show the same prices for the markets we show.
+              - DraftKings ignores the site name, so we cannot choose or confirm its region.
+              - Canadian IPs are not blocked from an AWS Canada instance; a home or VPS address may
+                still be (untested). Then use `npm run dev:remote` or `BOOKS=fake`.
+Alternatives: - Ontario column: rejected. FD prices are identical to NJ for everything we display, DK
+                cannot be pointed at Ontario, so a second column would repeat NJ's numbers.
+              - A different state per book: rejected; DK cannot be pointed at one anyway.
+Evidence:     Measured 2026-10-19 from AWS Ohio, US-east-1 and Canada (Montréal): README FD-16
+              (25 US jurisdictions + Ontario + Alberta reachable; 90/90 game-line runners and an
+              event page's props identical), DK-17 (REST and socket ignore the site name, even a
+              bogus "zz"), FD-9 (no state or country geofence), FD-3 (id namespaces).
+              Raw results and scripts: docs/regional-data-sourcing.txt.
+Trade-offs:   The DK feed's jurisdiction is unknown, so "NJ" is a label for FD only. The test was
+              one pre-game snapshot; Sunday props, live markets and promos are untested.
+Revisit if:   A Sunday-window re-test shows regional price differences, or DK exposes a working
+              region selector. FD Ontario/Alberta then only needs hosts on fanduel.ca (probe:
+              `node scripts/probe-egress.mjs --state on`); DK would need a new discovery.
 Where:        DK_STATE, FD_REGION (src/books/*.ts, src/server/config.ts); "dev:remote" in
-              package.json and web/vite.config.ts; README "Running the app" (Canada note).
+              package.json and web/vite.config.ts; README "Running the app" (Canada note);
+              scripts/probe-egress.mjs.
 
 ----------------------------------------------------------------------------------------------------
 D-04  Latency measurement model: book -> backend -> browser, per book, pregame and live
@@ -1015,11 +1018,12 @@ Decision:     vitest, plus Testing Library and jsdom for the web app; CI on Node
                 it found became a unit test (board link drop; a late copy delivered twice).
 Alternatives: - Testing only against the live books: rejected; nondeterministic, and live
                 windows are rare.
-Evidence:     144 tests in 18 files pass locally (2026-10-19). CI runs on every push once the repo
-              is published; it has no commits yet.
+Evidence:     145 tests in 19 files pass (2026-10-19). CI (GitHub Actions: npm ci, typecheck,
+              test, build on Node 24.22.0) passed on the first push to
+              github.com/tristorez/OddsComparisonTool and runs on every push.
 Trade-offs:   Fakes can diverge from the real books; replays of real captures limit that.
 Revisit if:   A bug escapes the suites; it becomes a fixture.
-Where:        test/ (bestPrice, feedMerge, board, integration, replay, pollPhase, fake),
+Where:        test/ (bestPrice, feedMerge, board, integration, replay, pollPhase, fake, latency),
               web/src/**/*.test.ts(x), src/server/fake.ts, scripts/replay-merge.ts,
               scripts/drills.ts,
               vitest.config.ts, .github/workflows/ci.yml.

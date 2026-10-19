@@ -90,6 +90,7 @@ export class FeedLinkClient {
       sock.write(encode({ t: 'hello', v: 1, feed: this.opts.feedId, boot: this.boot, token: this.opts.token, books: [...this.connectors.keys()] }));
     });
     sock.on('data', (chunk) => {
+      if (this.sock !== sock) return; // a late frame on a replaced socket (e.g. its welcome) is ignored
       let lines: string[];
       try {
         lines = splitter.push(chunk);
@@ -128,9 +129,11 @@ export class FeedLinkClient {
     });
     sock.on('error', (err) => this.opts.log(`feed link error: ${err.message}`));
     sock.on('close', () => {
+      // A socket replaced by stop()/start() must not touch the newer connection's state or reconnect.
+      if (this.sock !== sock) return;
       const was = this.ready;
       this.ready = false;
-      if (this.sock === sock) this.sock = null;
+      this.sock = null;
       if (!this.running) return;
       const delay = Math.min(10_000, 500 * 2 ** Math.min(this.attempt++, 5));
       if (was) this.opts.log(`feed link down; reconnecting in ${delay}ms`);

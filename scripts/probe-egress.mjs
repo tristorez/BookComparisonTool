@@ -5,6 +5,9 @@
  *
  *   node probe-egress.mjs [--state nj] [--seconds 10]
  *
+ * --state takes a US state (nj, pa, …) or a Canadian province FanDuel serves (on, ab). Canadian
+ * regions use the `.ca` FanDuel hosts and DK's `dkca…` / `sportsbook-ws-ca-…` names.
+ *
  * Checks DK REST snapshot, DK socket (upgrade + subscribe ack), FD board, FD SMP prices and
  * FD PIR push (upgrade + connection_ack), then prints a verdict for running from this host.
  */
@@ -22,6 +25,10 @@ const arg = (name, fallback) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
 const STATE = arg('state', 'nj').toLowerCase();
+const CA = ['on', 'ab'].includes(STATE);
+const FD_DOMAIN = CA ? 'fanduel.ca' : 'fanduel.com';
+const DK_SITE = CA ? `dkca${STATE}` : `dkus${STATE}`;
+const DK_WS_HOST = CA ? `sportsbook-ws-ca-${STATE}` : `sportsbook-ws-us-${STATE}`;
 const SECONDS = Number(arg('seconds', '10'));
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
 const FD_APP_KEY = 'FhMFpcPWXMeyZxOx';
@@ -149,25 +156,37 @@ async function egress() {
   }
 }
 
+const DK_REST_HEADERS = {
+  'User-Agent': UA,
+  Accept: 'application/json, text/plain, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Origin: 'https://sportsbook.draftkings.com',
+  Referer: 'https://sportsbook.draftkings.com/',
+};
+const dkRestUrl = (site) => `https://sportsbook-nash.draftkings.com/api/sportscontent/${site}/v1/leagues/88808/categories/492/subcategories/4518`;
+const priceSignature = (data) =>
+  (data.selections ?? []).map((s) => `${s.marketId}|${s.label}|${s.points ?? ''}|${s.displayOdds?.american}`).sort().join(';');
+
 async function dkRest() {
-  const url = `https://sportsbook-nash.draftkings.com/api/sportscontent/dkus${STATE}/v1/leagues/88808/categories/492/subcategories/4518`;
-  const { res, body, data, ms } = await getJson(url, {
-    headers: {
-      'User-Agent': UA,
-      Accept: 'application/json, text/plain, */*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Origin: 'https://sportsbook.draftkings.com',
-      Referer: 'https://sportsbook.draftkings.com/',
-    },
-  });
+  const { res, body, data, ms } = await getJson(dkRestUrl(DK_SITE), { headers: DK_REST_HEADERS });
   if (!res.ok) return fail(`HTTP ${res.status} (${res.headers.get('server') ?? '?'})${akamaiRef(body)}`);
   if (!data) return fail(`HTTP 200 but not JSON (bot challenge?): ${body.slice(0, 80).replace(/\s+/g, ' ')}`);
-  return ok(`200 · ${data.events?.length ?? 0} events · ${data.selections?.length ?? 0} selections · ${ms} ms`);
+  // Control: DK ignores the site name (README DK-17), so a status code alone proves reachability, not the region.
+  let control = '';
+  try {
+    const c = await getJson(dkRestUrl('zz'), { headers: DK_REST_HEADERS });
+    control = c.data
+      ? priceSignature(c.data) === priceSignature(data)
+        ? ' · same prices as bogus site "zz": site name ignored, region NOT verified'
+        : ' · differs from bogus site "zz": site name is honoured'
+      : ` · bogus site "zz" → HTTP ${c.res.status}: site name is validated`;
+  } catch {}
+  return ok(`200 · ${data.events?.length ?? 0} events · ${data.selections?.length ?? 0} selections · ${ms} ms${control}`);
 }
 
 async function dkSocket() {
   const started = Date.now();
-  const conn = await wsConnect(`wss://sportsbook-ws-us-${STATE}.draftkings.com/websocket?format=json&locale=en`, {
+  const conn = await wsConnect(`wss://${DK_WS_HOST}.draftkings.com/websocket?format=json&locale=en`, {
     headers: { Origin: 'https://sportsbook.draftkings.com', 'Accept-Language': 'en-US,en;q=0.9' },
   });
   if (conn.status !== 101) return fail(`upgrade HTTP ${conn.status} (${conn.server ?? '?'})${akamaiRef(conn.body)}`);
@@ -204,7 +223,7 @@ async function dkSocket() {
           forwardedHeaders: {},
           clientMetadata: { feature: 'league', 'X-Client-Name': 'web', 'X-Client-Version': '2640.4.1.8' },
           jwt: 'default-token',
-          siteName: `dkus${STATE}`,
+          siteName: DK_SITE,
         },
       }),
     );
@@ -222,11 +241,11 @@ async function dkSocket() {
 /** FD board → market ids, then SMP prices and PIR push against those ids. */
 async function fanduel() {
   const tz = encodeURIComponent('America/New_York');
-  const headers = { 'User-Agent': UA, Accept: 'application/json', Origin: 'https://sportsbook.fanduel.com', Referer: 'https://sportsbook.fanduel.com/' };
+  const headers = { 'User-Agent': UA, Accept: 'application/json', Origin: `https://sportsbook.${FD_DOMAIN}`, Referer: `https://sportsbook.${FD_DOMAIN}/` };
   const out = { board: null, smp: null, pir: null };
 
   const board = await getJson(
-    `https://sbapi.${STATE}.sportsbook.fanduel.com/api/content-managed-page?page=CUSTOM&customPageId=nfl&pbHorizontal=false&timezone=${tz}&_ak=${FD_APP_KEY}`,
+    `https://sbapi.${STATE}.sportsbook.${FD_DOMAIN}/api/content-managed-page?page=CUSTOM&customPageId=nfl&pbHorizontal=false&timezone=${tz}&_ak=${FD_APP_KEY}`,
     { headers },
   );
   if (!board.res.ok || !board.data?.attachments) {
@@ -238,19 +257,19 @@ async function fanduel() {
   const ids = markets.map((m) => m.marketId).slice(0, 70);
   out.board = ok(`200 · ${new Set(markets.map((m) => m.eventId)).size} games · ${markets.length} main markets · ${board.ms} ms`);
 
-  const smp = await getJson(`https://smp.${STATE}.sportsbook.fanduel.com/api/sports/fixedodds/readonly/v1/getMarketPrices?priceHistory=0`, {
+  const smp = await getJson(`https://smp.${STATE}.sportsbook.${FD_DOMAIN}/api/sports/fixedodds/readonly/v1/getMarketPrices?priceHistory=0`, {
     method: 'POST',
     headers: { ...headers, 'Content-Type': 'application/json' },
     body: JSON.stringify({ marketIds: ids }),
   });
   out.smp = smp.res.ok && Array.isArray(smp.data) ? ok(`200 · ${smp.data.length} markets priced · ${smp.ms} ms`) : fail(`HTTP ${smp.res.status} (${smp.res.headers.get('server') ?? '?'})`);
 
-  const host = `pir.${STATE}.sportsbook.fanduel.com`;
+  const host = `pir.${STATE}.sportsbook.${FD_DOMAIN}`;
   const auth = { Authorization: FD_PIR_KEY, host };
   const b64 = (o) => encodeURIComponent(Buffer.from(JSON.stringify(o)).toString('base64'));
   const started = Date.now();
   const conn = await wsConnect(`wss://${host}/graphql/realtime?header=${b64(auth)}&payload=${b64({})}`, {
-    headers: { Origin: 'https://sportsbook.fanduel.com' },
+    headers: { Origin: `https://sportsbook.${FD_DOMAIN}` },
     protocol: 'graphql-ws',
   });
   if (conn.status !== 101) {
@@ -322,5 +341,6 @@ const dk =
         ? 'DraftKings: REST OK, socket blocked → proxy the socket (DK_WS_PROXY_URL).'
         : 'DraftKings: blocked from this IP → needs another host or a US residential/ISP proxy (DK_PROXY_URL).';
 const fdOk = fd.board.ok && fd.smp.ok && fd.pir.ok;
+console.log('\nNote: the DraftKings rows prove reachability only; DK ignores the site name, so they do not show a region.');
 console.log(`\n${dk}\nFanDuel: ${fdOk ? 'OK to run directly from this host.' : 'not fully reachable (see rows above).'}`);
 process.exit(dkR.ok && dkW.ok && fdOk ? 0 : dkW.ok && fdOk ? 2 : 1);

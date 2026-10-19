@@ -1146,7 +1146,7 @@ Each entry lists **symptom → diagnosis → resolution**, plus its current stat
     are futures and awards (MVP, Coach of the Year, Number-X overall pick), not game lines.
 - **Consequence.** An Ontario column would show the same prices as NJ for what we display, so we did not
   build one. **Limits:** one Monday-night snapshot; we did not test Sunday player props, live markets,
-  promos or boosts, or anything behind a login. Ontario/Alberta PIR push was checked only for DNS.
+  promos or boosts, or anything behind a login. The probe confirmed the Ontario and Alberta PIR push handshake (`probe-egress.mjs --state on|ab`).
 - **Latency (median of 6, warm).** From AWS Canada: FD NJ board 17 ms, FD Ontario board 15 ms, DK REST
   46 ms. From US-east-1: 17, 18 and 87 ms (DK min 30 ms). Server location did not change the answers.
 

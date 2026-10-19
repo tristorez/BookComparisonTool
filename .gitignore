@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+*.log
+.env.*
+!.env.example
+# Server addresses, tokens and keys stay out of the repo: only *.example templates are committed.
+# The boxes keep their real config in /etc/odds/*.env.
+deploy/hosts.env
+*.env
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+# Betstamp's take-home document (not ours to publish)
+Betstamp Take Home - DraftKings-FanDuel.pdf

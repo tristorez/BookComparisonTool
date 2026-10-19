@@ -1,0 +1,1299 @@
+DECISIONS.TXT
+Real-time NFL odds board, DraftKings vs FanDuel (Betstamp take-home): the decision log
+====================================================================================================
+
+PURPOSE
+  The assignment PDF, Key Concept 1: "We will ask you to defend each choice."
+  This file is that defence, written down. For every decision it gives the problem, what we chose,
+  what we rejected and the concrete reason it lost, the evidence and its source, what the choice
+  costs, and what would change our mind. The README links here, and code comments cite entries
+  by ID (src/shared/wire.ts cites D-07 and D-21, src/server/feedMerge.ts D-35).
+
+HOW TO READ IT
+  - Start with the INDEX: it maps each section of the PDF to the decisions that answer it.
+  - Then one block per decision, D-01 to D-40, in ID order. IDs are stable and never reused.
+  - Block fields:
+      Status        state and date (legend below) | PDF section it answers | Owner
+      Context       the problem and its constraints
+      Decision      what we do
+      Alternatives  what we weighed, each with the reason it lost
+      Evidence      measurements and tests, each with its source
+      Trade-offs    what the decision costs
+      Revisit if    the evidence that would change it
+      Where         code paths, README sections, docs. "(planned)" marks a path from the plan's
+                    repo layout that is not written yet.
+  - Evidence sources: "README <section or issue id>" is README.md in this repo; "plan" is the
+    approved implementation plan; "measured 2026-10-19 on Box A" was taken that day on the AWS
+    host; a repo path (e.g. test/replay.test.ts) means the figure is in that file. No number
+    here is a projection unless it is labelled as an expectation or an estimate.
+  - Owners: "user" is the user's call; "user + Claude" is the user's call, refined with Claude;
+    "Claude (plan)" comes from the approved plan; "Claude (build)" was settled while building,
+    within the plan; "reviews" means shaped by the independent design review (a Claude Plan
+    agent) and/or the external Codex review; "ingestion session" is the session that built the
+    book connectors.
+  - Entries are never deleted. A replaced entry is marked "Superseded by D-xx" and kept. The file
+    is updated at the end of every implementation phase (plan Phases 0-7).
+
+STATUS LEGEND
+  Accepted          Decided and in force; the evidence cited is in hand.
+  Proposed          Suggested, not yet signed off by the user.
+  Superseded        Replaced by the entry named; kept for the record.
+  Pending evidence  Decided, but a supporting measurement has not been taken yet. The Evidence
+                    field names the phase that will produce it and the method.
+  Statuses combine, e.g. "Accepted 2026-10-19; Pending evidence (Phase 6)".
+
+TERMS
+  Box A       AWS t3.medium in us-east-2b with an Elastic IP: board, website, feed A, builds, and
+              every run that needs DraftKings.
+  Box B       AWS t3.micro in us-east-2b: feed B only, streamed to Box A over private TCP 7070.
+  Feed        One box's ingestion of every book (one connector per book per box).
+  First copy  The earliest report of a new price state from any feed; the board keeps that one.
+  PIR / SMP   FanDuel's AppSync GraphQL push channel / FanDuel's uncached price origin (polled).
+  bt / rx     The book's own change timestamp (DK createdTime in ms; FD PIR updatedAt in whole
+              seconds) / our receive time on the box that got the first copy.
+  R1-R5       The best-price rules (D-21). "est." labels R3; "by line" labels R4.
+
+====================================================================================================
+INDEX: assignment PDF section -> the decisions that answer it
+====================================================================================================
+
+GOAL / SCOPE
+  Main lines (moneyline, spread, total), pregame and live ........ D-01
+  Two books side by side from day one ............................ D-17, D-21, D-28
+  Best available price, book name underneath ..................... D-21, D-22, D-23, D-30
+  Toggle at the top: Best Price | DraftKings | FanDuel ........... D-28
+  Updates pushed to the browser, no refresh button ............... D-06, D-07, D-08
+  Live at a public URL ........................................... D-10, D-11, D-38
+  One book down or sending garbage; the other keeps updating ..... D-25, D-26, D-33
+  The UI makes clear which data is stale ......................... D-25, D-30
+  Which state's prices (NJ); reviewers in Canada ................. D-03
+  Any language, any stack ........................................ D-06, D-24, D-28
+
+KEY CONCEPT 1: SPEED AND LATENCY
+  How old is the number on screen: book -> backend -> browser .... D-04, D-05
+  How we get data out of each book ............................... D-12, D-13
+  Full snapshots vs deltas ....................................... D-20, D-07
+  Pushing to the browser (WebSockets, SSE, etc.) ................. D-06, D-07
+  Payload size ................................................... D-09
+  Batching vs sending immediately ................................ D-08
+  Where we host relative to the books ............................ D-10, D-11
+  Two feeds racing: first copy wins, staggered polls ............. D-33, D-34, D-35, D-36
+
+KEY CONCEPT 2: GETTING THE DATA
+  DraftKings: what the site loads, what we use ................... D-12
+  FanDuel: fastest path the site uses; what we tried ............. D-13
+  FD poll interval: justification and latency cost ............... D-13, D-36
+
+KEY CONCEPT 3: AUTH, GEO AND BOT PROTECTION
+  What we hit and how we got around it ........................... D-14, D-37, D-39
+  Cookies, tokens, sessions; recovery without a human ............ D-15, D-39
+  Rate limits and terms of service ............................... D-16
+  Region locks; reviewers in Canada .............................. D-03, D-37
+  A second IP against IP-reputation blocks ....................... D-33
+
+KEY CONCEPT 4: SHAPE OF THE DATA AND MATCHING
+  One clean model: game, market, side, line, odds, book .......... D-17
+  Team names, kickoff times, game identity ....................... D-18
+  How lines and odds are expressed; change detection ............. D-19
+  Which book sends the full picture, which sends changes ......... D-20
+  Best price when the books are on different lines ............... D-21, D-22, D-23
+
+KEY CONCEPT 5: BACKEND DESIGN
+  One ingestion per book, not one per browser tab ................ D-24
+  Holding up with many viewers ................................... D-08, D-09, D-24
+  Staleness, eligibility, failure isolation ...................... D-25, D-26, D-40
+  A third book without re-architecting ........................... D-27
+  Redundant ingestion across two boxes ........................... D-33, D-34, D-35
+
+FINAL OUTPUT (README ITEMS)
+  Live URL and GitHub repo ....................................... D-11, D-38
+  How to run it locally .......................................... D-31, D-37
+  Architecture overview .......................................... D-24, D-33
+  How we get data from each book, and why ........................ D-12, D-13
+  Latency per book, pregame and live: method, results, cuts ...... D-04, D-05, D-10, D-13
+  What we hit with each book (geo, bot protection, rates) ........ D-14, D-15, D-16, D-39
+  What we'd do next with more time ............................... D-01, D-27
+  Tests and tooling behind the claims ............................ D-31, D-32, D-40
+
+ABOVE & BEYOND (OPTIONAL)
+  Odds moving: flash + previous price (the one extra taken) ...... D-02, D-29
+  Latency on the page (declined; measured and documented) ........ D-02, D-04
+  Reconnects, retries, a UI that says data is stale .............. D-07, D-12, D-25, D-26, D-30
+  Props, alt lines, other leagues (declined; next steps) ......... D-01, D-02
+  A third book, or ten; where AI tooling helps ................... D-27
+
+OPEN EVIDENCE (filled in as the phases land)
+  Failure drills: done (npm run drills; Box B stop in production)  Phase 4: D-25, D-40
+  SSE edge checks (a)-(f) from Canada; deploy checks ............. Phase 5: D-11, D-26
+  End-to-end latency per book x pregame/live ..................... Phase 6: D-04, D-05, D-12, D-13
+  Load test at 5,000 clients (needs several load machines) ....... Phase 6: D-09, D-24
+  Box B first-copy share and median lead ......................... Phase 6: D-33, D-36
+
+
+====================================================================================================
+DECISIONS
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+D-01  Scope: NFL main lines, pregame and live
+Status: Accepted 2026-10-19 | PDF: Goal / Scope | Owner: user
+Context:      The PDF requires moneyline, spread and total for each NFL game, pregame plus live,
+              and calls props, alt lines and other leagues nice-to-haves. Latency is what it
+              cares about most.
+Decision:     Main lines only, both books, pregame and in-play: 3 markets x 2 sides per game.
+              - DK: subcategory 4518 ("Game Lines -> Game"). While a line move is mid-flight, the
+                MainPointLine / main selection is preferred.
+              - FD: the board's one main market per type per game (MONEY_LINE,
+                MATCH_HANDICAP_(2-WAY), TOTAL_POINTS_(OVER/UNDER)).
+Alternatives: - Alt lines and props now: rejected. They multiply markets and connector surface
+                (FD puts the alt line inside the runner name; DK uses separate subcategories
+                13195 / 13196) and add nothing to the graded question, "how old is the number on
+                the screen?".
+              - Other leagues: rejected for the same reason. Only the team table (D-18) and the
+                league ids are NFL-specific, so this is configuration later, not redesign.
+Evidence:     First DK live run on Box A: 15 games and 90 quotes, 1:1 with FD (plan); README
+              Status: all 15 games and every side line up one-to-one. All 45 FD NFL main markets
+              fit one SMP request (README Getting the data: FanDuel).
+Trade-offs:   A bettor who wants an alt line sees only the main line. A book on a different main
+              line is still compared, via D-21.
+Revisit if:   Main lines are done and measured. Alt lines are the first extension (README "What
+              we'd do next").
+Where:        src/books/draftkings.ts (GAME_LINES_SUBCATEGORY), src/books/fanduel.ts
+              (GAME_LINE_TYPES); README "Normalization and matching".
+
+----------------------------------------------------------------------------------------------------
+D-02  Above & Beyond: one extra, the price-move flash with the previous price
+Status: Accepted 2026-10-19 | PDF: Above & Beyond | Owner: user
+Context:      The PDF lists five optional extras, and each competes for time with the graded
+              core: latency, correctness and resilience. Two are core work anyway: the Goal
+              requires a stale-data UI (D-25, D-30), and the third-book question is answered in
+              writing (D-27).
+Decision:     Build exactly one extra: flash a price that just moved and show the previous price
+              beside it (semantics in D-29). The user explicitly declined an on-page latency
+              panel and a replay mode. Latency is measured and documented instead (D-04).
+Alternatives: - On-page latency panel ("how fresh each number is right now"): declined. The data
+                is collected anyway (browser beacons, D-04). A panel adds UI and on-screen
+                clock-skew caveats, not better measurement; the README and docs/latency/ carry
+                the numbers.
+              - Replay mode (recorded movement played back outside game windows): declined. It
+                is a second data path to build and test, and recorded fixtures already serve the
+                regression tests (D-32).
+              - Props, alt lines, other leagues: declined, see D-01.
+Evidence:     User decision, 2026-10-19 (plan, "Decisions locked with the user": Extras).
+Trade-offs:   Freshness shows per book (status chip "last move Xs ago", stale marking), not per
+              number. Outside live windows the board moves little.
+Revisit if:   Reviewers want per-number freshness on screen. The beacon data already exists, so
+              a panel would be UI-only work.
+Where:        web/src/components/PriceCell.tsx; D-29.
+
+----------------------------------------------------------------------------------------------------
+D-03  Jurisdiction: New Jersey prices for both books
+Status: Accepted 2026-10-19 | PDF: Goal / Scope; Key Concept 3 | Owner: user
+Context:      Both books price per state, and each state is its own namespace (FD market ids: NJ
+              734.x, Missouri 729.x; DK site dkusnj, socket host sportsbook-ws-us-nj). A
+              comparison is only fair if both books are read for the same state. Reviewers are
+              likely in Canada, where Ontario lines differ.
+Decision:     NJ for both books (DK_STATE=nj, FD_REGION=nj: both connectors' default, and
+              configurable). The README's "Viewing and running from Canada" note says:
+              - The live URL works from Canada; the browser only talks to our server.
+              - Prices are NJ lines, so a reviewer's own Ontario DK/FD app shows other numbers.
+              - US book APIs are reported to geo-restrict Canadian IPs (unverified; FD-9), so
+                local runs from Canada use `npm run dev:remote` (local UI against the hosted
+                server) or `BOOKS=fake`.
+Alternatives: - Ontario lines: rejected. They need Canadian egress for both books, which gives
+                up the us-east-2 placement next to FD's push origin (D-10), and the connectors
+                were reverse-engineered and verified against the US endpoints.
+              - A different state per book: rejected; it breaks the like-for-like comparison.
+Evidence:     FD reads are not geofenced per state: a Missouri IP reads NJ prices (README FD-9).
+              Per-state namespaces: README FD-3, DK-2. The Canadian-IP block is reported by
+              others; README FD-9 notes we have not verified it ourselves.
+Trade-offs:   Reviewers cannot check our numbers against their own apps. Spot checks need a US
+              vantage point (plan Verification 3).
+Revisit if:   Betstamp wants Ontario lines. That takes a Canadian egress for both books and the
+              CA endpoints (DK-2 found the Alberta variant: dkcaab, sportsbook-ws-ca-ab).
+Where:        DK_STATE, FD_REGION (src/books/*.ts, src/server/config.ts); "dev:remote" in
+              package.json and web/vite.config.ts; README "Running the app" (Canada note).
+
+----------------------------------------------------------------------------------------------------
+D-04  Latency measurement model: book -> backend -> browser, per book, pregame and live
+Status: Accepted 2026-10-19; Pending evidence (Phase 6) | PDF: Key Concept 1 | Owner: Claude (plan)
+Context:      The PDF's main question: "how old is the number on the screen?", end to end, per
+              book, pregame and live, across three clocks: the book's, our boxes', the viewer's.
+Decision:     Every quote carries bt, rx, the first channel and the first feed. Per-channel
+              `sample` events (before cross-channel dedupe) time each channel without bias
+              toward the winner, and DK's createdTime / publishedTime / websocketPublishTimestamp
+              split DK's leg into engine, pipeline and gateway. Legs: book -> box = rx - bt;
+              box -> board = flush - rx; board -> browser and book -> browser via the page's
+              estimate of the server clock (min-RTT offset from 5 x /api/time, refreshed every
+              5 min; each beacon carries its error bound, +/- RTT/2, and the server keeps their
+              distribution as the browserClockError series); paint = receive to the next
+              animation frame. Beacons every 15 s (at most 300 samples) go to POST
+              /api/latency. Reservoirs per book x phase x channel x feed give p50/p90/p99/n and
+              the skew floor min(rx - bt); snapshots, resumes and hidden tabs are excluded. DK
+              reconcile corrections are logged (3 or more trigger a resubscribe); a "missed by
+              push" counter is not built yet.
+Alternatives: - Server-side only (rx - bt): rejected; it omits the browser leg the PDF asks for.
+              - Browser age against the browser's own clock: rejected; a viewer's clock error is
+                unknown and can swamp the signal. The offset method bounds it.
+Evidence:     Box clocks: Amazon Time Sync; chrony on 2026-10-19: Box A 0.95 us fast, Box B 1.0 us
+              slow (README Latency). First per-channel readings in production (/api/metrics,
+              DK pregame, n = 27 per box, 2026-10-19): DK gateway -> box p50 15-17 ms; DK
+              engine -> publish p50 20-21 ms but p90 1.2-1.3 s (inside DK); Box B's copy p50
+              55 ms behind the first. End-to-end per book x pregame/live: Pending evidence
+              (Phase 6). scripts/measure-e2e.ts runs through WAS@SF (Mon 10/19, 8:15 pm ET;
+              00:00-03:40 UTC) from the St. Louis dev VPS into docs/latency/, saving
+              /api/metrics every 15 min; a run from Canada (as reviewers) needs the user.
+              Later windows: Thu 10/22 NE@CHI, Sun 10/25 full slate, Mon 10/26 DAL@PHI.
+Trade-offs:   Book clocks are not ours, and FD's has whole-second resolution (D-05). Poll-first
+              FD quotes carry no bt, so they report backend -> browser plus a bound.
+Revisit if:   The clock-offset error (+/- RTT/2) nears the legs being measured.
+Where:        src/server/latency.ts, web/src/lib/clock.ts, web/src/lib/latency.ts,
+              scripts/measure-e2e.ts; src/shared/wire.ts (LatencySample); docs/latency/.
+
+----------------------------------------------------------------------------------------------------
+D-05  FanDuel precision rule: raw age is reported as an upper bound
+Status: Accepted 2026-10-19 | PDF: Key Concept 1 | Owner: Claude + reviews
+Context:      FD's only book timestamp, PIR updatedAt, has whole-second resolution (truncated). A
+              change late in a second is stamped at the start of that second, so raw age
+              overstates the true age by up to 1 s.
+Decision:     The true FD book -> X latency lies in (raw - 1 s, raw]. Raw is reported as an
+              upper bound, with that interval, everywhere (README, docs/latency/, /api/metrics).
+              A midpoint figure appears only labelled "estimate (truncation-corrected)". DK
+              createdTime is in ms and needs no such rule.
+Alternatives: - Report the midpoint as the result: rejected. It assumes changes are spread evenly
+                within the second, so it is an estimate, not a measurement. The README's
+                "~0.5 s typical" is labelled as an estimate for this reason.
+              - Leave FD out of book-side latency: rejected; the bound is still informative.
+Evidence:     PIR push age at receipt, raw p10/p50/p90 (README Latency): St. Louis, 180 s, 143
+              markets: 586/1035/1492 ms; Ohio (Box A), 120 s, 70 live markets: 524/964/1373 ms.
+              Under this rule the St. Louis p50 is at most 1035 ms, true value in (35, 1035] ms.
+              NFL pregame/live and book -> browser: Pending evidence (Phase 6).
+Trade-offs:   FD rows look worse than DK rows at equal true latency; the README says why.
+Revisit if:   FD exposes a sub-second timestamp on either channel.
+Where:        src/server/latency.ts; README "Latency: measured so far", FD-5.
+
+----------------------------------------------------------------------------------------------------
+D-06  Browser transport: Server-Sent Events, not WebSockets
+Status: Accepted 2026-10-19 | PDF: Key Concept 1 | Owner: user
+Context:      Updates must reach the browser on their own. Traffic is one-way, server ->
+              browser; the only upstream traffic is a periodic latency beacon.
+Decision:     SSE: GET /api/stream (text/event-stream) through Caddy over HTTP/2 (D-11).
+              Beacons are plain POSTs (sendBeacon to /api/latency).
+Alternatives: - WebSocket: rejected. Latency is the same, since both write a frame to an open TCP
+                connection. WebSocket buys two-way messaging we don't use and gives up what SSE
+                has built in: automatic reconnect with Last-Event-ID resume (D-07), plain HTTP
+                through the proxy (no upgrade), and HTTP/2 multiplexing of many tabs on one
+                connection.
+              - Browser polling: rejected; it adds up to a full interval of age to every update.
+              - A hosted pub/sub service: rejected; a third party and an extra hop inside the
+                very path we are measuring.
+Evidence:     Stack decision (plan, "Decisions locked with the user"); it supersedes an earlier
+              README draft that planned WebSocket push. SSE behaviour through the edge: Pending
+              evidence (Phase 5), checks listed in D-11.
+Trade-offs:   EventSource cannot set headers, so resume uses Last-Event-ID or ?since= (D-07).
+              Browsers cap HTTP/1.1 connections per origin, so HTTP/2 is required (D-11).
+Revisit if:   Viewers need to send per-update messages (e.g. subscribe to a subset of games), or
+              a proxy in the path buffers SSE.
+Where:        src/server/sse.ts, web/src/lib/stream.ts, src/shared/wire.ts; README "Serving the
+              board: Server-Sent Events".
+
+----------------------------------------------------------------------------------------------------
+D-07  Stream protocol: snapshot then deltas, <boot>.<seq> ids, sequence invariants
+Status: Accepted 2026-10-19 | PDF: Key Concept 1 | Owner: Claude + reviews
+Context:      Browsers join mid-stream, reconnect after blips and must survive a server restart
+              without ever applying a delta to the wrong base state.
+Decision:     - Connect: one snapshot, then deltas. Event ids are <boot>.<seq> (boot is random
+                per process start); resume via Last-Event-ID or ?since=. A snapshot replaces the
+                replay when the boot differs, seq is ahead of head or older than the ring tail
+                (2,000 deltas), or the replay would be bigger; built and attached in one turn.
+              - Invariants: (1) seq counts emitted deltas only, consecutive, never skipped;
+                (2) snapshot or replay first, then live deltas, heartbeats interleaved; (3) hb.seq
+                is never ahead of the deltas written on that connection (deltas go out in their
+                flush, heartbeats from a timer); (4) a heartbeat follows every replay. Heartbeat
+                {boot, seq, ts, status} on connect, then every 5 s.
+              - Client: apply a delta only if seq = lastApplied + 1; ignore duplicates and older
+                ones; a gap -> resume; new boot -> resync; hb.seq > lastApplied -> a gap, resume;
+                12 s without a frame -> reconnect with ?since= (backoff 1 s to 15 s). While
+                disconnected, the board shows stale.
+Alternatives: - Plain integer ids: rejected. After a restart seq starts over, and a client could
+                "resume" into another process's history; the boot prefix rules that out.
+              - Heartbeats without seq: rejected; a lost delta would hide until that cell moved.
+              - A snapshot on every reconnect: rejected; wasteful when the ring holds the gap.
+Evidence:     Ids and invariants came from the design and Codex reviews. test/integration.test.ts
+              (real sockets): snapshot then consecutive deltas with heartbeats never ahead;
+              resume via Last-Event-ID and ?since=; a different boot gets a snapshot. Through
+              the edge: Pending evidence (Phase 5, D-11).
+Trade-offs:   The ring costs memory; a client gone for more than 2,000 deltas gets a snapshot.
+Revisit if:   Resume-vs-snapshot counts in /api/metrics show the ring too short on a full slate.
+Where:        src/shared/wire.ts (the contract), src/server/sse.ts, src/server/board.ts,
+              web/src/lib/stream.ts; README "Serving the board: Server-Sent Events".
+
+----------------------------------------------------------------------------------------------------
+D-08  Coalesce per event-loop turn; never batch on a timer
+Status: Accepted 2026-10-19 | PDF: Key Concept 1 | Owner: Claude + reviews
+Context:      The PDF asks about batching vs sending immediately. One book frame often changes
+              several quotes at once, and each change can move the best price for both sides.
+Decision:     Changes accumulate within one event-loop turn and flush via setImmediate as one
+              delta, adding under 1 ms. Nothing is batched on a timer: connectors apply each
+              frame immediately, and the feed link forwards each change immediately. A flush
+              recomputes both sides of each affected (game, market) and emits only real
+              changes, never an empty delta. Then seq++, stamp ts, push to the ring, broadcast.
+Alternatives: - One event per quote change: rejected. A line move would reach browsers as
+                half-applied states (one side moved, best not yet recomputed): visible
+                inconsistency for no latency gain.
+              - A fixed batching window: rejected. It adds up to a whole window of age to every
+                update, to save bytes we don't need to save (D-09).
+Evidence:     The connectors alone on Box A: event-loop lag p99 0.5 ms (README Hosting). Unit
+              test: one
+              event-loop turn -> one delta (test/board.test.ts). Board time (flush - rx) per
+              book: Pending evidence (Phase 6).
+Trade-offs:   A burst inside one turn becomes one larger delta.
+Revisit if:   Profiling shows one turn's work stalling the loop.
+Where:        src/server/board.ts; README "Serving the board: Server-Sent Events".
+
+----------------------------------------------------------------------------------------------------
+D-09  Payload: compact JSON, serialized once, no stream compression
+Status: Accepted 2026-10-19; Pending evidence (Phase 6) | PDF: Key Concept 1 | Owner: Claude (plan)
+Context:      The PDF asks about payload size, and the design must hold up with many viewers
+              (Key Concept 5).
+Decision:     - Deltas carry only what changed (quotes, bests, status) with short keys (bt, rx,
+                ch, feed, prev). A snapshot goes out only on join, or when a replay would be
+                bigger.
+              - Each delta is serialized once, and the same string is written to every socket.
+              - No compression on the SSE stream. @fastify/compress handles everything else;
+                the Caddyfile has no `encode`.
+              - Backpressure: a client with 1 MB unsent has its response destroyed; it resumes
+                (D-07).
+Alternatives: - Per-connection gzip of the stream: rejected. Deltas are small, a compressor per
+                client costs CPU and memory at scale, and compressors buffer, which adds age.
+              - Binary encoding (MessagePack, protobuf): rejected. It brings schema brittleness
+                for a negligible saving, the same call as DK-3.
+Evidence:     A one-market move is ~550 bytes (two quotes with previous prices, two best-price
+              cells); the full snapshot is ~58 KB uncompressed for a 15-game slate (README
+              Serving the board). Bytes per delta and per snapshot across live windows (SseHub
+              counters lastDeltaBytes, maxDeltaBytes, lastSnapshotBytes): Pending evidence
+              (Phase 6).
+Trade-offs:   JSON is larger than binary on the wire, which doesn't matter at these sizes.
+Revisit if:   Snapshots grow (more leagues, alt lines); then compress the snapshot event only.
+Where:        src/server/sse.ts, src/server/app.ts, deploy/Caddyfile; src/shared/wire.ts;
+              README "Serving the board: Server-Sent Events".
+
+----------------------------------------------------------------------------------------------------
+D-10  Hosting region: AWS us-east-2 (Ohio)
+Status: Accepted 2026-10-19 | PDF: Key Concept 1 | Owner: user + Claude
+Context:      FD's push service (AppSync) runs in us-east-2 per FD's own web config; its REST
+              hosts sit behind CloudFront (from Ohio, PoP CMH68 Columbus; the origin answers
+              "Cougar"). DK sits behind Akamai; its client config puts API gateways in GCP
+              us-east4 (N. Virginia).
+Decision:     Run both feed boxes and the board in AWS us-east-2b.
+Alternatives: - us-east-1: rejected. It might be ~10 ms closer to DK but would be ~10 ms farther
+                from FD, and both are dwarfed by the books' own publish delays.
+              - The St. Louis dev VPS: rejected. Akamai blocks it on every DK host (DK-1), and
+                every FD path is slower (below).
+              - A free PaaS (the PDF suggests Fly.io, Render, Railway, Vercel): rejected. DK
+                access depends on egress-IP reputation (D-14), so we need IPs we can probe and
+                keep (an Elastic IP), long-lived sockets, and a region of our choosing.
+Evidence:     Measured 2026-10-19, warm connections, AWS us-east-2b (the first test instance and
+              Box A) vs St. Louis (README Hosting):
+              - FD PIR connection_init -> connection_ack: 1.3-4.7 ms vs 26-62 ms
+              - FD PIR GraphQL, warm time to first byte: 10-12 ms (CMH68) vs 57 ms (ORD58)
+              - FD SMP round trip: ~12 ms vs 39 ms
+              - DK subscribe -> subscribed: 35-63 ms vs blocked (403)
+              - DK REST snapshot, cold incl. TLS: 130-220 ms (an earlier run: 193 ms) vs blocked
+              The books' own delays, for scale: FD push raw p50 964 ms from Ohio (an upper bound,
+              D-05); DK: tens of ms to over a second between createdTime and publishedTime in
+              public captures, ours pending (README Hosting).
+Trade-offs:   Both boxes sit in one AZ: no zone diversity, but a ~1 ms link (D-34).
+Revisit if:   DK's network leg (rx - websocketPublishTimestamp) proves large, or AWS ranges get
+              blocked.
+Where:        README "Hosting: region, instances and network"; deploy/.
+
+----------------------------------------------------------------------------------------------------
+D-11  Edge: Caddy on Box A, automatic TLS on sslip.io, HTTP/2, no load balancer or CDN
+Status: Accepted 2026-10-19; Pending evidence (Phase 5) | PDF: Key Concept 1 | Owner: user + Claude
+Context:      The edge must not buffer SSE. It should speak HTTP/2 so many tabs share one
+              connection, and it must give a public HTTPS URL without buying a domain.
+Decision:     Caddy (a static binary under systemd, D-38) serves <elastic-ip>.sslip.io with an
+              automatic certificate and reverse-proxies to the board on 127.0.0.1:8080 with
+              flush_interval -1, so SSE frames are never buffered. It speaks HTTP/2 (and
+              advertises HTTP/3, which works only if UDP 443 is open to Box A: unverified).
+              The board sends no-cache, no-transform and X-Accel-Buffering: no, sets TCP
+              no-delay, and asks clients to retry after 1000 ms + jitter. No ALB, no CloudFront.
+Alternatives: - ALB or CloudFront in front: rejected. They add a hop, plus idle timeouts and
+                buffering to tune on the latency-critical stream, for one board instance.
+              - nginx: rejected. SSE needs its proxy buffering turned off, and certificates need
+                separate tooling; Caddy does both by default.
+              - TLS inside Node: rejected; certificate renewal would live in the app process.
+              - Buying a domain: unnecessary; sslip.io gives the Elastic IP a hostname.
+Evidence:     Through the public URL: a first check (vantage point not recorded) saw a 33 ms first
+              byte; from St. Louis on 2026-10-19: HTTP/2, first byte 91 ms, retry 1031 ms,
+              heartbeat gaps 4.5-5.0 s (README Serving the board). The full
+              edge checks from a machine in Canada (measure-e2e --smoke): Pending evidence
+              (Phase 5): (a) first byte under 200 ms; (b) 10 Hz fake deltas arrive unbuffered;
+              (c) an idle stream survives 15 min; (d) h2 with 10 tabs; (e) a restart gives a new
+              boot id and a snapshot; (f) /healthz stays 200 with DK down. Deploy checks
+              R-a..R-g: Phase 5.
+Trade-offs:   sslip.io is a third-party DNS dependency. The board box is a single point of
+              failure for viewers: the feeds are redundant, the board is not (D-24).
+Revisit if:   Any of checks (a)-(f) fails, or viewer load needs more than one board (D-24).
+Where:        deploy/Caddyfile, deploy/caddy.service; src/server/sse.ts; README "Serving the
+              board: Server-Sent Events".
+
+----------------------------------------------------------------------------------------------------
+D-12  DraftKings: REST snapshot plus socket deltas in JSON, parallel bootstrap
+Status: Accepted 2026-10-19 | PDF: Key Concept 2 | Owner: ingestion session + reviews
+Context:      DK's web client (dk-data-layer) loads a REST snapshot, then takes deltas over a
+              JSON-RPC 2.0 WebSocket, with no sequence numbers and no replay on reconnect.
+Decision:     - As DK's own client: REST snapshot (league 88808, subcategory 4518), then socket
+                deltas, format=json.
+              - (Re)connect: the snapshot runs in parallel with the socket handshake, buffered
+                frames replay on top, and a resync follows 2 s later (DK's REST answers carry
+                cache-control: public,max-age=1, so the snapshot can predate the subscription).
+              - A 60 s reconcile corrects lost frames; values the socket touched in the last
+                10 s keep the socket's value. Liveness and bad-read guards: D-26.
+              - DK's EVENT_STATES enum is exactly NOT_STARTED / STARTED / FINISHED: live =
+                STARTED; FINISHED retires the game.
+Alternatives: - Subscribe, settle 1.5 s, then snapshot: replaced; it cost ~1.5 s per reconnect.
+              - Socket-only bootstrap (initialData:true): rejected on evidence. From Box A, DK
+                sent only the ack (the first update came 53 s later), so a cold start needs
+                REST; Box B covers a REST block on one IP (D-33).
+              - MessagePack (DK's production format): rejected. Positional arrays let a schema
+                change silently misplace prices, and the bytes it saves don't matter on frames
+                that carry only what changed (DK-3).
+              - REST polling: rejected; edge-cached and slower than push.
+Evidence:     From Ohio: live in 250-540 ms (the 180-245 ms snapshot completes inside the
+              246-516 ms it takes to open the socket and get the subscription acknowledged),
+              against ~2 s with the sequential order (README DraftKings, Key decisions).
+              createdTime-based latency: Pending evidence (Phase 6).
+Trade-offs:   Every (re)connect depends on REST, plus one REST read per minute per box.
+Revisit if:   DK adds sequence numbers or replay, or REST is blocked on both IPs (then proxy REST
+              only via DK_REST_PROXY_URL, keeping the socket direct).
+Where:        src/books/draftkings.ts; README "Getting the data: DraftKings", DK-2..DK-16.
+
+----------------------------------------------------------------------------------------------------
+D-13  FanDuel: PIR push raced against a 1 s SMP poll, merged per market; board page for discovery
+Status: Accepted 2026-10-19 | PDF: Key Concept 2 | Owner: ingestion session + user
+Context:      FD's own web board polls SMP every 5 s (pollingConfig refreshTimeInMs 5000). The
+              same bundle wires an AppSync push channel (PIR) into the betslip and hands it to
+              the native apps. PIR and SMP both return a market's full state.
+Decision:     - Subscribe PIR to every tracked NFL main market and poll SMP every 1 s on
+                wall-clock slots (D-36). The sbapi board (CDN max-age=30, swr=60) is discovery
+                only, every 30 s.
+              - MarketMerge per market: (1) push applies in updatedAt order; (2) otherwise the
+                first channel to show a different state wins.
+              - PIR liveness: ping every 5 s, dead after 12 s. AppSync answers pings ~1.0 s late
+                and sends ka only every 60 s, so neither alone can be the signal.
+Alternatives: - Earlier merge rules: no rollback to a state push had passed unless SMP repeated
+                it on 3 consecutive polls, and push held up to 2.5 s after a poll led. Rejected
+                on the replay: blocking re-shown states delayed 35 real reversals (prices go
+                S -> L -> S, and the poll often sees the reversal first); a push hold (tested at
+                <= 1.5 s) delayed 10 states by ~0.6 s. SMP never served a stale read.
+              - Poll at the site's 5 s: rejected. A poll every P seconds is P/2 stale on
+                average: ~2.5 s at 5 s, against ~0.5 s at 1 s.
+              - Push alone: rejected; it trails the poll by ~0.25-0.5 s on 45% of changes.
+              - PIR's GraphQL query as the poll: rejected; first on 4 of 337 changes, and 1.4 s
+                behind push at p50 (FD-14).
+              - Prices from the board page: rejected; up to ~90 s old.
+Evidence:     Box A, 337 changes on 70 live markets: first was push 182, SMP 151, PIR GraphQL 4.
+              Replay of a 3-minute Box A recording (696 push frames, 179 polls): 288 of 297
+              differing polls led push (p50 235 / p90 460 ms), 0 stale; MarketMerge showed 312 of
+              693 states before push (mean 249 ms earlier), 0 wrong-way flips, 0 late (README
+              FanDuel, FD-7). AppSync ping replies: 1002-1019 ms.
+Trade-offs:   A 1 s poll runs faster than FD's own 5 s client (ToS posture: D-16).
+Revisit if:   FD rate-limits SMP, push becomes reliably first, or PerimeterX reaches the APIs.
+Where:        src/books/fanduel.ts (MarketMerge); scripts/replay-merge.ts,
+              test/fixtures/fd-live-2026-10-19.jsonl.gz; README "How push and poll are merged".
+
+----------------------------------------------------------------------------------------------------
+D-14  Egress IP and HTTP client fingerprint, with a probe gate
+Status: Accepted 2026-10-19 | PDF: Key Concept 3 | Owner: user + Claude
+Context:      DK's Akamai denies by IP/ASN reputation (DK-1: every DK host returned 403 from the
+              Contabo dev VPS, AS40021, for curl, Node fetch and Python urllib alike), and it also
+              scores the HTTP client (DK-10). FD's PerimeterX guards only the HTML site (FD-1);
+              FD's WAF rejects requests without a User-Agent (FD-8).
+Decision:     - Egress from AWS us-east-2 IPs that pass; Box A's is an Elastic IP.
+              - One HTTP client everywhere: Node 24's built-in fetch with a dispatcher from the
+                undici package of the same major (7.x), so the egress probe and the connectors
+                present one fingerprint. Browser-like headers.
+              - Gate: after any Node, undici or IP change, re-run scripts/probe-egress.mjs and a
+                2-minute watch:dk on both boxes; stop and investigate on a 403.
+              - No credentials, no challenge solving. Per-channel proxies stay as a last resort.
+Alternatives: - A residential/ISP proxy from the start: rejected. It adds a hop to the
+                latency-critical socket and costs money; it is kept as a DK-only fallback if
+                both AWS IPs are blocked.
+              - Node's bare https.request: rejected; 403 from the same accepted IP (DK-10).
+              - Probe and connector on different clients: rejected; a passing probe would not
+                predict the connector (X-5).
+Evidence:     From AWS us-east-2, all five channels OK on both boxes: DK REST, DK socket, FD
+              board, SMP and PIR (README DK-1, Hosting). DK-10: same IP and URL, fetch 200 vs
+              https.request 403.
+Trade-offs:   IP reputation can change without notice. Box B has no Elastic IP, so its IP changes
+              on stop/start and must be re-probed.
+Revisit if:   Either box sees 403s. First proxy only REST (DK_REST_PROXY_URL: REST is needed at
+              startup and once a minute), then all of DK.
+Where:        src/books/http.ts, scripts/probe-egress.mjs; README DK-1, DK-10, X-5, FD-1, FD-8.
+
+----------------------------------------------------------------------------------------------------
+D-15  No logins, cookies or sessions; recovery needs no human
+Status: Accepted 2026-10-19; Trade-offs and Revisit if superseded by D-39 (2026-10-19) | PDF: Key
+        Concept 3 | Owner: ingestion session
+Context:      The PDF asks: "If your solution depends on a cookie, token or session, what happens
+              when it expires, and how does your system recover without a human?"
+Decision:     Use only the public, logged-out credentials the sites themselves ship: FD's static
+              _ak app key (sbapi) and PIR client key (AppSync), both in FD's JS bundle, and DK's
+              anonymous socket jwt, which DK's own token provider returns as the literal string
+              "default-token". Nothing expires, so recovery is reconnect plus re-snapshot.
+Alternatives: - Logged-in sessions: rejected. They bring expiry and account risk, and show no
+                extra odds.
+              - Cookies harvested by a headless browser: rejected. Brittle, and it starts a
+                bot-protection fight we don't need.
+Evidence:     README Key decisions ("No logins, cookies or sessions") and DK-4; the keys are in
+              src/books/fanduel.ts (DEFAULT_APP_KEY, DEFAULT_PIR_KEY).
+Trade-offs:   If FD rotates a key, FD goes down or degraded until the key is updated.
+Revisit if:   FD rotates _ak or the PIR key: automate re-reading the bundle (/sw.js ->
+              /static/js/main.*.js) and extracting the keys (README next steps). If DK switches to
+              its real anonymous-token endpoint (DK-4 risk), fetch that token before subscribing.
+Where:        src/books/fanduel.ts, src/books/draftkings.ts (DEFAULT_TOKEN); README DK-4.
+
+----------------------------------------------------------------------------------------------------
+D-16  Request rates and terms of service: two IPs at modest rates, hard backoff when refused
+Status: Accepted 2026-10-19 | PDF: Key Concept 3 | Owner: user + Claude
+Context:      Both books' terms prohibit automated access (X-2). We want speed without looking
+              like abuse, and two boxes double our footprint.
+Decision:     Read only public, logged-out endpoints the sites themselves call; no credentials,
+              no challenge solving. Per box: FD 1 SMP poll/s, 1 PIR socket and a board refresh
+              every 30 s; DK 1 socket and 1 REST read per minute, plus snapshots on reconnect.
+              Across both boxes: 2 FD polls/s (staggered, D-36) and 2 DK sockets. When refused
+              (401/403/429), the sockets, DK's bootstrap snapshot and FD's poll back off up to
+              30 s, doubling to 10 min (honouring Retry-After on HTTP answers); DK's 60 s
+              reconcile and FD's 30 s board refresh keep their cadence; the book shows as
+              blocked.
+Alternatives: - Faster FD polling from one IP: rejected. It is likelier to trip rate limits, and
+                blocks follow IP reputation, so a second IP protects more than a faster poller.
+              - Retrying a refusal at the normal reconnect pace: rejected; hammering a CDN that
+                is refusing us only deepens the block.
+Evidence:     README X-2 (rates per feed host), Key decisions ("Reconnect fast, then back off,
+              and back off hard when blocked"); plan Risks (2 FD polls/s, 2 DK sockets).
+Trade-offs:   We still read the books automatically, against the letter of both terms. That is
+              acceptable for a take-home, not for a product.
+Revisit if:   Any 429 or 403 appears, or this becomes a product (then licensed feeds).
+Where:        src/books/draftkings.ts, src/books/fanduel.ts, src/books/http.ts; README X-2.
+
+----------------------------------------------------------------------------------------------------
+D-17  Normalized model and identity
+Status: Accepted 2026-10-19 | PDF: Key Concept 4 | Owner: ingestion session + Claude
+Context:      The PDF asks for game, market, side, line, odds, book. The books differ in ids,
+              names, line conventions and price formats.
+Decision:     Quote {book, gameKey, market: moneyline|spread|total, side: home|away|over|under,
+              line, american, decimal, suspended, live, bookTime, receivedAt, channel}.
+              - Identity is (book, game, market, side), never a book's selection id; DK replaces
+                selection ids on every line move.
+              - Spread line = that side's own handicap (away +7.5, home -7.5) in both books;
+                total line = the total; moneyline line = null.
+              - Sides come from structured fields (FD result.type, DK outcomeType), never names.
+              - The primitive unions live in src/shared/domain.ts (browser-safe) and are
+                re-exported for the connectors; the wire format adds bt, rx, ch, feed and prev.
+Alternatives: - Keying by the books' selection or market ids: rejected. DK line moves are
+                remove + add with new ids, so every move would look like a removal.
+              - Storing only decimals: rejected (D-19).
+Evidence:     The DK live run lined up 1:1 with FD on every game and side (README Status).
+Trade-offs:   Main lines only by construction: the key has no line dimension for alt lines.
+Revisit if:   Alt lines or props arrive (the key gains a line or prop type).
+Where:        src/books/types.ts, src/shared/domain.ts, src/shared/wire.ts; README
+              "Normalization and matching".
+
+----------------------------------------------------------------------------------------------------
+D-18  Team resolution, game key, and filtering simulated games
+Status: Accepted 2026-10-19 | PDF: Key Concept 4 | Owner: ingestion session
+Context:      FD says "Washington Commanders" and DK "WAS Commanders" (rosettaTeamName
+              "Commanders"). Abbreviations collide ("NY" Giants/Jets, "LA" vs "LAR"). Kickoff
+              times disagree by a minute (FD 00:16Z vs DK 00:15Z). FD's in-play feed also lists
+              simulated eFootball games ("Detroit Lions (CLOCKWORK)").
+Decision:     Resolve every label by its last word, since all 32 NFL nicknames are unique single
+              words. gameKey = "<kickoff date in US Eastern>:<AWAY>@<HOME>", e.g.
+              2026-10-25:PIT@NO. FD's exact NFL competition filter excludes the sims; as defence
+              in depth, a label with parentheses never resolves to a team, so a simulated game
+              can never claim a real game's key.
+Alternatives: - Abbreviation tables per book: rejected; collisions and per-book drift.
+              - The exact kickoff timestamp in the key: rejected; the books differ by a minute,
+                and no NFL game starts near midnight ET, so the ET date is stable.
+              - Fuzzy string matching: rejected; nondeterminism for a closed set of 32 teams.
+Evidence:     README "Normalization and matching", X-1, X-4.
+Trade-offs:   A renamed team means editing one table. Two games between the same teams on one
+              ET date would collide; the NFL never schedules that.
+Revisit if:   A league whose nicknames are not unique is added (e.g. college).
+Where:        src/books/teams.ts; README "Normalization and matching".
+
+----------------------------------------------------------------------------------------------------
+D-19  Change detection on the American price; best price via American -> decimal
+Status: Accepted 2026-10-19 | PDF: Key Concept 4 | Owner: ingestion session + Claude
+Context:      Feed decimals differ in precision: FD PIR says 1.87 where SMP says 1.869565 for
+              the same price, and DK carries its own trueOdds decimal. DK writes negative
+              American odds with a U+2212 minus, which Number() can't parse.
+Decision:     - A quote changes only when its American price, line, suspended or live flag
+                changes; never on the decimal.
+              - Best price converts American -> decimal (americanToDecimal) and never uses a
+                feed decimal. Equal American prices are ties.
+              - The board drops and counts invalid quotes: |american| must be finite and >= 100,
+                the feed decimal within .02 of the American-derived one, the line finite.
+              - parseAmerican normalizes U+2212 and other dashes, and "EVEN"; a decimal <= 1
+                never becomes a price (it would give +/-Infinity).
+Alternatives: - Compare feed decimals: rejected. FD's two channels would "move" with no real
+                change (1.87 vs 1.869565), and ties would break on rounding noise.
+Evidence:     README FD-6, DK-7, X-6. Unit test: invalid prices are dropped and never thrown back
+              into a connector (test/board.test.ts).
+Trade-offs:   American prices are whole numbers, so sub-unit differences in true odds are
+              invisible. That matches what a bettor sees.
+Revisit if:   A book quotes prices that only decimals can express (none today).
+Where:        src/books/odds.ts, src/books/types.ts (diff), src/shared/odds.ts,
+              src/shared/bestPrice.ts, src/server/board.ts (validation).
+
+----------------------------------------------------------------------------------------------------
+D-20  Full state vs deltas, per book
+Status: Accepted 2026-10-19 | PDF: Key Concept 4; Key Concept 1 | Owner: ingestion session
+Context:      The PDF: "Some feeds send the full picture every time; others only send changes and
+              expect you to track the rest - which is each book?"
+Decision:     - DraftKings sends DELTAS: add / change / remove lists. A change object is partial
+                (a selection change has no marketId), so we keep full state and merge. A line
+                move is remove + add (replacedSelectionId), sometimes with changes arriving
+                before the add: orphan changes are held 10 s, and a removed side waits up to 1 s
+                for its replacement so the board never blinks. REST snapshot entities replace
+                rather than merge, because REST omits isSuspended when false (DK-8).
+              - FanDuel sends FULL STATE per market on both PIR and SMP. The newest state
+                replaces what we hold, with no delta bookkeeping, under D-13's merge rules.
+              - Our own browser stream is snapshot + deltas (D-07). Either way, the connectors
+                emit diffed BookChange batches.
+Alternatives: - Treating DK like FD by re-snapshotting often: rejected; DK REST is edge-cached and
+                slower than the socket.
+Evidence:     README DK-5, DK-6, DK-8; "Full state, not deltas" in README "Getting the data:
+              FanDuel".
+Trade-offs:   DK's state bookkeeping is the most intricate connector code; the 60 s reconcile
+              bounds any drift from a lost frame.
+Revisit if:   DK adds sequence numbers; then detect gaps instead of reconciling on a timer.
+Where:        src/books/draftkings.ts, src/books/fanduel.ts, src/books/types.ts (commit, diff).
+
+----------------------------------------------------------------------------------------------------
+D-21  Best price across books and lines: rules R1-R5, exact, labels
+Status: Accepted 2026-10-19 | PDF: Key Concept 4; Goal | Owner: user + Claude
+Context:      The PDF: define "best price" when the books are on different lines (e.g. -3 -110
+              vs -3.5 +100) and explain the call. The user set the rules; review refined them.
+              Supersedes the README's proposed rule, "line first, then price".
+Decision:     Pure compareOdds(a, b, ctx) -> {pick, reason, exact}; bestOf takes the max of a
+              per-offer score (consistent for N books). Prices compare as American -> decimal.
+              R1  Moneyline: higher payout. exact; no label.
+              R2  Spread or total on the same line: higher payout. exact; no label.
+              R3  Pregame spread, different lines, anchor available (D-22): highest estimated
+                  return per $1, R = P(win) * decimal + P(push), from the anchor and the push
+                  table (D-23). Label "est.".
+              R4  Different lines where no model applies (totals; live spreads, since pregame
+                  push tables are invalid in-play; pregame spreads with no anchor): the better
+                  line for the bettor first (over: lower; under: higher; spread: more points
+                  taken or fewer laid), then higher payout. Label "by line".
+              R5  Equal displayed price on equal terms: a tie; every tied book listed. exact.
+              A best is exact only if every offer it beat was on identical terms. The odds shown
+              are always the book's actual odds; the label sits beside the book name.
+Alternatives: - Line first everywhere (the user's first spec): kept only as R4. On pregame spreads
+                it treats half a point as worth any price; R3 prices the half point with the
+                push rate instead (3 lands 9.2%).
+              - Labelling R4 "est." too: rejected after the Codex review. R4 is a rule, not an
+                estimate; the user accepted "est." for R3 only and "by line" for R4.
+              - Leaving different lines uncompared: rejected; the PDF asks for a call.
+Evidence:     The PDF's example, with pm(3) = .09 injected: favourite to DK (.981 vs .933),
+              underdog to FD (.978 vs .936), worked in D-22. On the live board (README Best
+              price): PIT@NO favourite, DK -3 -105 vs FD -2.5 -120, goes to FD (est. 0.967 vs
+              0.943); the underdog goes to DK +3 -115. Tests: test/bestPrice.test.ts (each rule,
+              ties, lines crossing pick'em, exact over a set); PriceCell.test.tsx (labels).
+Trade-offs:   R3 rests on a model; the "est." label and its tooltip say so.
+Revisit if:   A live win-probability model exists (R3 in-play), or totals get a push table.
+Where:        src/shared/bestPrice.ts, src/shared/wire.ts (BestRule),
+              web/src/components/PriceCell.tsx (labels and tooltips); README "Best price".
+
+----------------------------------------------------------------------------------------------------
+D-22  Fair-probability anchor: consensus no-vig, both sides scored against one anchor
+Status: Accepted 2026-10-19 | PDF: Key Concept 4 | Owner: user + Claude
+Context:      R3 needs P(win) and P(push) for each offer. The first version scored each offer
+              with its own book's no-vig probability.
+Decision:     A pluggable getFairProbability(game, market). The default, meanNoVig, is the mean
+              of the qualifying books' multiplicative no-vig P(cover). Both sides of a spread are
+              scored against the same anchor, so favourite and underdog picks stay consistent.
+              - A book qualifies for a pregame spread when both sides are present, unsuspended
+                and validly priced, the book isn't stale, home line = -away line, and the game
+                isn't live. One qualifying book is enough, and offers needn't come from one.
+                With none, the market falls back to R4.
+              - Margin axis M = home - away; anchor = P(M > x) at a half-point x. A book at
+                integer h gives x = -h + .5 with p * (1 - pm(-h)); at half-point h, x = -h with
+                p. Books move to a common x through the push masses between, then average and
+                clamp to [.001, .999].
+Alternatives: - Scoring each offer with its own book's no-vig: rejected. R collapses to
+                (1 - push)/overround + push, identical for both sides, so the same book wins
+                both sides of every market. Verified numerically on the PDF example: DK .9586 vs
+                FD .9565, on both sides.
+              - A sharp-book or exchange anchor: unavailable with two books; the hook is ready.
+Evidence:     The PDF example, completed with away prices: DK home -3 / away +3, both -110; FD
+              home -3.5 +100 / away +3.5 -120; pm(3) = .09. Anchor P(M > 3.5) = .455 (DK), .478
+              (FD), .467 (mean). Favourite: DK .981 vs FD .933. Underdog: FD .978 vs DK .936
+              (plan Phase 1; test/bestPrice.test.ts).
+Trade-offs:   With two books the consensus is thin, and one off-market book moves it. The
+              cross-book sanity check (D-25) excludes grossly inconsistent games.
+Revisit if:   A third book or a sharper reference arrives; swap the anchor function.
+Where:        src/shared/bestPrice.ts (getFairProbability, bookAnchor, estimatedReturn);
+              README "Best price".
+
+----------------------------------------------------------------------------------------------------
+D-23  NFL push table from nflverse, with empirical-Bayes shrinkage
+Status: Accepted 2026-10-19 | PDF: Key Concept 4 | Owner: Claude (plan)
+Context:      R3 needs the chance that the final margin lands exactly on the line. In the NFL
+              that is far from uniform: 3 and 7 are key numbers.
+Decision:     scripts/build-push-table.ts builds the table once from nflverse
+              nfldata/data/games.csv (completed games only), and the JSON is committed. For
+              k = 1..21, p(k) = P(favourite wins by exactly k | |spread| within +/-1 of k),
+              shrunk toward the pooled rate: p_k = (hits_k + 300 * pooled_k) / (n_k + 300), so
+              m = 300. k = 0 is the tie rate: 16 ties in 7,368 games (.0022), stored smoothed as
+              (16 + 1)/(7,368 + 2) = .0023. The script asserts result = home - away and that
+              spread_line > 0 means home favoured (the opposite sign from the books).
+Alternatives: - Raw empirical rates: rejected. Windows are too sparse for k >= 15 (n < 200); raw
+                k = 17 was .094 on n = 53, which would make 17 look like a key number.
+              - Margin frequencies that ignore the spread: rejected; the margin depends on the
+                spread (corr(spread_line, result) = +0.43).
+              - A parametric margin model (e.g. normal): rejected; it cannot produce key numbers.
+Evidence:     7,368 completed games, 1999-2026. p(3) = .092 (n = 2,920), p(7) = .061,
+              p(10) = .044, p(14) = .041, p(17) = .035, p(6) = .034, p(4) = .029, p(1) = .020.
+              The test asserts the top four are 3, 7, 10, 14 and every p <= .12.
+Trade-offs:   The |k| lookup holds near the market line; +/-k symmetry is assumed near pick'em.
+              Pregame only: in-play margins follow a different distribution, hence R4 live.
+Revisit if:   Scoring rules change or recent seasons drift from the long-run rates; rebuild from
+              the latest games.csv (one fetch; the table is committed).
+Where:        scripts/build-push-table.ts, src/shared/pushTable.ts,
+              src/shared/data/nfl-push-table.json; README "Best price" (the push table).
+
+----------------------------------------------------------------------------------------------------
+D-24  Process layout: one ingestion per book per box, one board, state in memory
+Status: Accepted 2026-10-19; Pending evidence (Phase 6) | PDF: Key Concept 5 | Owner: user + Claude
+Context:      The PDF: "One ingestion per book, not one per browser tab. Your design should hold
+              up with many viewers watching at once."
+Decision:     - Box A, one Node process (ROLE=board): DK + FD connectors (feed A), FeedLinkServer
+                (feed B), the Board (merge + best price), SseHub, the static web app, the API.
+              - Box B runs ROLE=feed: the DK and FD connectors -> FeedLinkClient.
+              - All state lives in memory: current quotes, the 2,000-delta ring, latency
+                reservoirs. A restart rebuilds from the books in under a second (FD live 0.2 s
+                after start, DK 0.25-0.5 s; README Status).
+              - A viewer costs one write of a pre-serialized string per delta (D-09).
+Alternatives: - Redis or a database between ingestion and fan-out: rejected. It adds a hop to
+                every update, and nothing needs durability: the books are the source of truth.
+              - Connections to the books per viewer: ruled out by the PDF, and it would multiply
+                our footprint (D-16).
+              - A service per book: rejected for now; a connector is an object, not a service.
+Evidence:     The two connectors alone on Box A (watch harness, before the board was deployed):
+              140 MB RSS, 1.2-1.7% of one core, event-loop lag p99 0.5 ms (an earlier reading:
+              142 MB, 1-2%). Deployed, quiet pregame (2026-10-19): the Box A process 164 MB RSS
+              and under 1% of a core; Box B's feed 138 MB (README Hosting). Load test (load-sse,
+              St. Louis -> Box A over TLS, synthetic books; README "Many viewers"): 0 failures
+              at 50 / 500 / 2,000 viewers; p50/p90/p99 44/158/460 ms at 500 x ~18 deltas/s and
+              76/202/872 ms at 2,000 x 5/s; saturated at 2,000 x ~18/s (~320 Mbit/s), bottleneck
+              not isolated. 5,000: Pending evidence (Phase 6); one load machine can't generate
+              it (2,000 already took 8 load-sse processes), so it needs several.
+Trade-offs:   The single board process is a single point of failure for viewers; the feeds are
+              redundant (D-33), the board is not.
+Revisit if:   Production nears what saturated the test (~2,000 viewers at ~18 deltas/s, ~320
+              Mbit/s, above a t3.medium's ~256 Mbit/s network baseline), or emit -> receive p99
+              passes 1 s. Reviewed 2026-10-19 after that run: the layout stands, because a live
+              game's rate (~5 deltas/s) held 2,000 viewers at p99 872 ms. Past that point: SSE
+              edge boxes each subscribe once to the board's snapshot + delta stream (D-07) and
+              serve their own viewers (still one board), and shorter payload keys.
+Where:        src/server/index.ts, src/server/board.ts, src/feed/index.ts, scripts/load-sse.ts;
+              README "Architecture", "Running the app", "Serving the board" ("Many viewers").
+
+----------------------------------------------------------------------------------------------------
+D-25  Eligibility and staleness: stale only when every feed is stale; safety overlays
+Status: Accepted 2026-10-19 | PDF: Goal; Key Concept 5 | Owner: reviews
+Context:      The PDF: keep working when one book is down or returns something unexpected, make
+              clear which data is stale. Best price must never rest on a dead or wrong number.
+Decision:     - Per-book staleAfterMs on lastDataAt, which any frame, pong, keepalive or
+                successful poll refreshes (every <= 5 s on a quiet board): DK 15 s, above its 12 s
+                dead-socket limit, so a dead socket is replaced before DK reads stale; FD 5 s. Plus
+                STALE_GRACE_MS = 5 s of hysteresis so a blip doesn't flash "stale".
+              - A book is stale only when every feed for it is stale (D-33).
+              - Eligible for best: not suspended, book not stale, valid (D-19), not a pregame
+                line on a live game, game not suspect.
+              - Overlays: a frozen-feed watchdog (in a live game, feed X shows no change for a
+                book for 90 s while the other feed changed >= 5 live quotes: X is marked
+                unhealthy and restarted, at most once per 5 min); a mass-removal hold (a batch
+                removing > 30% of a book's quotes, and >= 12, waits 15 s); a cross-book sanity
+                check (pregame no-vig more than .20 apart at lines within 1.5 points flags the
+                game suspect, out of best).
+Alternatives: - One global stale timeout: rejected; the books' failure modes and reconnect times
+                differ, so each book gets its own threshold.
+              - Hiding stale quotes: rejected; the PDF wants stale data marked (D-30).
+              - No hysteresis: rejected; flapping at the boundary makes the UI noisy.
+Evidence:     Thresholds and overlays came from the design and Codex reviews (plan Phase 2).
+              Unit tests for each (test/board.test.ts). Drills (npm run drills, D-40; README "The
+              board"), 11 of 11 pass: Box B crashes -> its feeds down in 0.1 s, books live; B
+              hangs -> link dropped after 5.0 s of silence; DK stopped on A -> B carries it; then
+              B crashes too -> DK stale in 0.1 s and in 0 of 48 best prices; invalid prices
+              dropped (79), none shown; an 80% removal held 15 s, the board kept all 48; a
+              frozen DK feed flagged and restarted, DK never stale. They found one bug here,
+              fixed and tested: a link drop wasn't a health flip, so a book that lost its last
+              healthy feed kept its best prices until an unrelated move (17 of 48 after 1.5 s).
+              Production, 2026-10-19: stopping Box B showed both its feeds "feed link down"
+              within 3 s while both books stayed live on A. Not run on real books: firewalling
+              DK (CHAOS is refused in production); the board-side path is the drills' one.
+Trade-offs:   A frozen book can show prices for up to staleAfter + grace before it is marked.
+Revisit if:   The drills show false stale flags or late detection.
+Where:        src/server/registry.ts (staleAfterMs), src/server/board.ts, src/server/config.ts;
+              src/shared/wire.ts (WireBookStatus.stale); README "The board: two feeds, one view".
+
+----------------------------------------------------------------------------------------------------
+D-26  Failure isolation and recovery: connectors degrade, the board keeps serving
+Status: Accepted 2026-10-19 | PDF: Goal; Key Concept 5 | Owner: reviews
+Context:      One book or feed failing must not stop the other, a bad read must not wipe the
+              board, and a health check must not restart a healthy board because a book is down.
+Decision:     - Both connectors ping every 5 s and treat 12 s of silence as dead (1 s watchdog);
+                the first retry comes within 250 ms, growing to 30 s.
+              - DK: a connection epoch discards work from an older connection; resubscribe
+                make-before-break after 45 s without update frames in live games, or when a
+                reconcile corrects >= 3 quotes; a snapshot dropping >30% of the games (with
+                >= 4 held) needs a read >= 30 s later to agree; with REST down after a
+                reconnect, deltas keep updating the last board, flagged degraded (if live
+                within 2 min).
+              - FD: an empty SMP answer is a failure; subscription sets swap only once acked; a
+                market missing from 3 consecutive polls is closed and tombstoned for 2 min.
+              - Every listener runs in its own try/catch with counters (X-3). /healthz = process
+                liveness only (200 even with DK down); /api/health has status per book x feed.
+Alternatives: - /healthz reflecting book health: rejected; restarts can't fix a book, and they
+                would drop every viewer.
+              - Crash on error and rely on the restart: rejected; it takes the healthy book down
+                too and sends every viewer back to a snapshot.
+              - Mass-drop confirmation by the next read alone: replaced; in the replay harness
+                two back-to-back empty reads still blanked the board (DK-13).
+Evidence:     A local server speaking DK's protocol (README Reliability; not in the repo yet):
+              dead socket detected 12.1 s after the last message (was 45-60 s), live 0.2 s later;
+              close 1011 -> reconnected in 154 ms;
+              REST out -> degraded in 0.3 s, live 0.1 s after it returned. test/integration:
+              a feed or book fails and the board stays live. /healthz through the edge: 200
+              (measure-e2e --smoke check (f), both books up); it is static process liveness
+              (src/server/app.ts), and in the drills (D-40) the board answered every health poll
+              (10 a second) while DK was down on every feed.
+Trade-offs:   A wedged but alive board passes /healthz; the frozen-feed watchdog (D-25) covers
+              the feeds, not the board itself.
+Revisit if:   An incident shows a wedged board that the liveness check missed.
+Where:        src/books/draftkings.ts, src/books/fanduel.ts, src/books/types.ts (dispatch);
+              src/server/app.ts, src/server/index.ts; README "Reliability", DK-11..16, FD-10..13.
+
+----------------------------------------------------------------------------------------------------
+D-27  A third book, or ten
+Status: Accepted 2026-10-19 | PDF: Key Concept 5; Above & Beyond | Owner: Claude (plan)
+Context:      The PDF: a third book shouldn't require re-architecting; and "What changes to add a
+              third book, or ten? Where could AI or other tooling make that scale?"
+Decision:     A book is a BookConnector subclass, plus its id in BookId and ALL_BOOKS, a registry
+              entry (BOOKS + createConnector) and its env options; nothing in the board, stream
+              or UI changes. The subclass is a translator: it maps its feed into BookGame / Quote
+              and calls commit(); the base class owns diffing, state, status, per-channel samples
+              and safe dispatch. The UI toggle is built from snapshot.books (the registry), best
+              price is N-ary (bestOf), the anchor averages any number of books, and staleness and
+              the feed merge are per book (each registry entry sets staleAfterMs and its
+              timestamp resolution).
+Alternatives: - Per-book code paths in the board or UI: rejected; that is exactly the
+                re-architecture the PDF warns about.
+Evidence:     Both connectors share the base class and no consumer code is book-specific (README
+              Architecture: "A third book is a new translator, not a re-architecture").
+Trade-offs:   Reverse-engineering each book stays manual, and each book brings its own egress and
+              bot-protection constraints (D-14).
+Revisit if:   Heading for ten books. Then isolate egress per book (process or box), and let AI
+              tooling draft connectors: point an agent at a site's bundle and network capture to
+              draft the connector and a replay fixture, which humans review (README next steps).
+Where:        src/books/types.ts, src/server/registry.ts; README "What we'd do next".
+
+----------------------------------------------------------------------------------------------------
+D-28  Frontend stack and store
+Status: Accepted 2026-10-19 | PDF: Goal; Key Concept 1 | Owner: user
+Context:      A Betstamp-like board: the best price with the book name underneath, a toggle for
+              Best Price | DraftKings | FanDuel, and many cells updating per second without jank.
+Decision:     Vite + React + TypeScript + Tailwind, built to static files the board serves from
+              the same origin (no CORS). An external store with per-key useSyncExternalStore,
+              stable cached snapshots, rAF-batched notifications, and one shared 1 s clock for
+              ages (corrected by the server offset, clamped at 0). The toggle (?view=) is built
+              from snapshot.books. Live games first, then by ET date; away above home; columns
+              Spread | Total | Moneyline; mobile-first.
+Alternatives: - Board state in React context: rejected; one price move would re-render the
+                whole board.
+              - A server-rendered framework (e.g. Next.js): rejected. The board is a live client
+                view; SSR and SEO buy nothing, and static files from the same process are
+                simpler.
+Evidence:     User decision (plan, "Decisions locked with the user": Stack). Paint time per
+              update (receive -> next animation frame), measured by web/src/lib/latency.ts:
+              Pending evidence (Phase 6).
+Trade-offs:   React's per-update overhead, kept small by per-cell subscriptions.
+Revisit if:   Paint time becomes a measurable share of book -> screen age.
+Where:        web/src/lib/store.ts, web/src/lib/view.ts, web/src/components/; package.json;
+              README "The UI".
+
+----------------------------------------------------------------------------------------------------
+D-29  Price-move flash: when it fires and when it doesn't
+Status: Accepted 2026-10-19 | PDF: Above & Beyond | Owner: user + Claude
+Context:      The one extra (D-02). A flash that fires on non-moves teaches users to ignore it.
+Decision:     CSS keyframes on a per-cell change counter: green when the move favours the
+              bettor, red otherwise. The previous price shows struck through for 5 s. It fires
+              only on cause:'price' moves of the displayed value, never on a snapshot, view
+              switch, tab return, eligibility change, heal or failover. The server sets prev
+              {american, line, at} only when the American price or the line changes.
+Alternatives: - Detecting moves by diffing in the client: rejected. A reconnect snapshot or a
+                view switch would look like a move; only the server knows the cause.
+              - Flashing on suspension too: rejected; eligibility has its own hatched state
+                (D-30).
+Evidence:     web/src/components/PriceCell.test.tsx (green/red flash; a line move shows the
+              previous line and price); no flash on snapshot, view switch, heal or failover
+              (plan Verification).
+Trade-offs:   A heal (D-35) that corrects a value doesn't flash, so a rare correction is silent.
+Revisit if:   Users want to see heals.
+Where:        web/src/components/PriceCell.tsx (PREV_PRICE_MS = 5000), web/src/styles.css;
+              src/shared/wire.ts (WirePrev, cause); README "The UI".
+
+----------------------------------------------------------------------------------------------------
+D-30  How ineligible and stale quotes are shown
+Status: Accepted 2026-10-19 | PDF: Goal; Above & Beyond | Owner: Claude (plan)
+Context:      The PDF wants stale data marked, not quietly shown, and best price must not use it.
+Decision:     In the Best view the other book is always visible, muted. Ineligible quotes
+              (stale, suspended, a pregame line on a live game, a suspect game) render hatched,
+              with a tag and "Not used for Best Price: <reason>", and never get the star. The
+              client derives eligibility from the same status the server uses. Each book has a
+              status chip ("live - last move Xs ago - 2 feeds", or "no data for Xs" when stale).
+              A banner shows when a book is down or the stream is reconnecting.
+Alternatives: - Remove ineligible quotes: rejected; it hides information, and a book outage
+                would look like "no market".
+              - Grey them out without a reason: rejected; the viewer can't tell why.
+Evidence:     web/src/components/PriceCell.test.tsx: a stale book is hatched, tagged, explained
+              and never starred; a disconnected stream makes every quote stale.
+Trade-offs:   More visual states to learn; each one has a tooltip.
+Revisit if:   User testing finds the hatching unclear.
+Where:        web/src/components/PriceCell.tsx, BookStatusChip.tsx, StaleBanner.tsx;
+              web/src/lib/eligibility.ts; README "The UI".
+
+----------------------------------------------------------------------------------------------------
+D-31  Runtime and dependencies: Node 24.22.0 pinned, engine-strict, install scripts blocked
+Status: Accepted 2026-10-19 | PDF: Final Output | Owner: Claude + reviews
+Context:      Akamai scores the HTTP client (DK-10), so a Node or undici change can change our
+              fingerprint, and reviewers need a reproducible build.
+Decision:     .nvmrc 24.22.0 (LTS "Krypton", released 2026-10-14 per nodejs.org/dist/index.json);
+              engines.node ">=24.15.0 <25", since jsdom 30 needs >= 24.15; .npmrc
+              engine-strict=true; @types/node ^24; TypeScript 5.9. Node comes from a
+              checksum-verified tarball, with no system packages. npm's install-script block
+              stays on; Vite/Rolldown, Tailwind oxide and esbuild native binaries arrive as
+              optional platform packages. Engine ranges, checked with npm view on 2026-10-19:
+              vite 8.3.4 and @vitejs/plugin-react 6.1.2 ^20.19.0 || >=22.12.0; vitest 5.0.5
+              ^22.12.0 || ^24.0.0 || >=26.0.0; jsdom 30.1.3 ^22.22.2 || ^24.15.0 || >=26.0.0;
+              concurrently 10.0.6 >=22; Fastify 5 targets Node >= 20.
+Alternatives: - Node 22 LTS: rejected. DK was verified under Node 24, and a different Node means
+                a different fetch/undici fingerprint to re-verify.
+              - Floating versions: rejected; an unreviewed undici bump could flip DK to 403.
+              - Allowing install scripts: rejected; supply-chain risk with no need.
+Evidence:     DK live on Box A under Node 24 (README Status); the engine table is in plan
+              Phase 0.
+Trade-offs:   A local run needs Node >= 24.15; engine-strict fails fast otherwise.
+Revisit if:   A Node 24 security release lands: bump, then re-run probe + watch:dk on both boxes
+              (D-14).
+Where:        .nvmrc, .npmrc, package.json (engines), .github/workflows/ci.yml; README "Running
+              the app", "Running the connectors locally".
+
+----------------------------------------------------------------------------------------------------
+D-32  Tests
+Status: Accepted 2026-10-19 | PDF: Final Output; Key Concept 5 | Owner: Claude (plan)
+Context:      The riskiest logic (feed merge, best price, stream sequencing) is pure and subtle,
+              and live games are only a few windows a week, so correctness can't wait for one.
+Decision:     vitest, plus Testing Library and jsdom for the web app; CI on Node 24.22 runs
+              npm ci, typecheck, test and build.
+              - Unit: best price (each rule, the PDF example, the push table), the cross-feed
+                merge (rules plus a randomized two-feed simulation), the board (coalescing,
+                staleness and grace, overlays, validation), and the web stream, store, clock,
+                latency and PriceCell states.
+              - Integration over real sockets: SSE and the feed link, including link drops.
+              - Replay: a live FD recording (test/fixtures/fd-live-2026-10-19.jsonl.gz) runs
+                through both merge layers, so any merge change is re-measured on the same data.
+              - Poll phase: test/pollPhase.test.ts runs the real schedulePoll under fake timers
+                (phases 0 and 500 ms); a naive interval schedule fails all three tests.
+              - Drills: scripts/drills.ts (npm run drills, ~5 min, outside CI) runs a board and
+                a feed process over a real link and breaks one thing at a time (D-40). Each bug
+                it found became a unit test (board link drop; a late copy delivered twice).
+Alternatives: - Testing only against the live books: rejected; nondeterministic, and live
+                windows are rare.
+Evidence:     144 tests in 18 files pass locally (2026-10-19). CI runs on every push once the repo
+              is published; it has no commits yet.
+Trade-offs:   Fakes can diverge from the real books; replays of real captures limit that.
+Revisit if:   A bug escapes the suites; it becomes a fixture.
+Where:        test/ (bestPrice, feedMerge, board, integration, replay, pollPhase, fake),
+              web/src/**/*.test.ts(x), src/server/fake.ts, scripts/replay-merge.ts,
+              scripts/drills.ts,
+              vitest.config.ts, .github/workflows/ci.yml.
+
+----------------------------------------------------------------------------------------------------
+D-33  Two active feed boxes from the start
+Status: Accepted 2026-10-19; Pending evidence (Phase 6) | PDF: Key Concept 1, 3, 5 | Owner: user
+Context:      DK blocks by IP reputation and client fingerprint (DK-1, DK-10), so a single IP is
+              a single point of failure for a whole book. FD's poll interval bounds how stale the
+              poll path can be.
+Decision:     Box A (t3.medium, 2 vCPU / 4 GB, Elastic IP) and Box B (t3.micro, 2 vCPU / 1 GB),
+              both in us-east-2b, both run both connectors. B streams to A over private TCP 7070
+              (D-34). The board keeps the first copy of each new state and never rolls back
+              (D-35). FD polls are staggered 0.0 / 0.5 s (D-36). A book is stale only when every
+              feed for it is stale.
+Alternatives: - Box A only, Box B later: considered and rejected by the user. The merge would
+                then be retrofitted rather than designed in, with no protection until then.
+              - Active-passive (an aggressive primary and a passive backup): rejected. The
+                aggressive box is the likeliest to be blocked, and failover would start cold.
+              - Faster polling from one IP: rejected; blocks follow IP reputation, not volume.
+Evidence:     Both boxes pass every egress check (README Hosting). B -> A link: p50 1 ms / p90
+              13 ms one-way in its first run; p50 0 / p90 1 / p99 3 ms over 4,356 samples in
+              /api/metrics on 2026-10-19 (README The board). Box B's first-copy share and median
+              lead (second-copy lag stats in /api/metrics): Pending evidence (Phase 6).
+Trade-offs:   Double footprint (2 FD polls/s, 2 DK sockets; D-16). The merge (D-35) is the
+              riskiest new logic. No zone diversity.
+Revisit if:   Phase 6 shows B rarely first and no IP ever blocked; then B could drop to standby.
+Where:        src/feedlink/, src/feed/index.ts, src/server/feedMerge.ts; README Key decisions
+              ("Two active feed boxes"), "The board: two feeds, one view".
+
+----------------------------------------------------------------------------------------------------
+D-34  Feed link: NDJSON over private TCP with a token, snapshot resync, no buffering
+Status: Accepted 2026-10-19 | PDF: Key Concept 5 | Owner: Claude (plan)
+Context:      Box B's normalized changes must reach Box A's board as fast as A's own, and the
+              link must recover from drops without rolling anything back.
+Decision:     NDJSON over TCP 7070 on A's private IP (security group: Box B only), no-delay on.
+              - B -> A: hello {feed, boot, token, books, v:1} within 5 s of connecting; then per
+                book a snapshot from connector.snapshot(); every change immediately, with
+                sentAt; status on change and every 1 s (lastDataAt advances silently).
+              - A -> B: welcome {boot}, restart {book}. Pings every 2 s.
+              - A compares token digests in constant time, lets a reconnect with the same feed id
+                replace the older (possibly half-open) connection, and counts and drops
+                malformed lines. Link down or > 5 s of silence: B's feeds are unhealthy at once,
+                and A carries the books alone.
+              - B reconnects with backoff from 0.5 s up to 10 s and resends hello + snapshots;
+                there is no local buffering.
+Alternatives: - WebSocket, HTTP/2 or gRPC: rejected; framing and dependencies we don't need
+                inside a VPC. NDJSON can be read with nc.
+              - Buffer and replay after a reconnect: rejected. Stale replays are exactly what the
+                merge must reject; a snapshot resync is simpler and correct.
+              - The public internet with TLS: rejected; the private VPC path never crosses it.
+Evidence:     One-way link latency: p50 1 ms / p90 13 ms in the first run; p50 0 / p90 1 / p99 3
+              ms over 4,356 samples on 2026-10-19 (README The board; method per the plan:
+              receivedAt on A - sentAt on B, chrony-synced). Same VPC and AZ; 7070 open only to
+              Box B's security group (README Hosting). test/integration.test.ts: first copies
+              from both boxes, and the board stays live when the link drops.
+Trade-offs:   The token travels without TLS inside the VPC; acceptable behind the security group.
+Revisit if:   The link's p90 (1-13 ms so far) grows, or the boxes move to different VPCs or regions
+              (then add TLS).
+Where:        src/feedlink/protocol.ts, src/feedlink/server.ts, src/feedlink/client.ts; README "The
+              board: two feeds, one view".
+
+----------------------------------------------------------------------------------------------------
+D-35  Cross-feed merge: first copy wins, ordered by when each state was in effect
+Status: Accepted 2026-10-19 | PDF: Key Concept 1, 5 | Owner: Claude (build) + reviews
+Context:      Two boxes, each with push, poll and snapshot channels, report the same book at
+              different lags. "Last write wins" would let a slower stream roll a price back.
+Decision:     A pure QuoteMerge per (book, quote key). Feeds are <box>:<channel> streams fed by
+              the connectors' sample events; state = (american, line, suspended, live).
+              - Each report gets an in-effect time: its book time, else its receive time minus
+                the channel's staleness (poll 50 ms, push 1 s, snapshot 2 s). knownAt = the
+                latest time the shown state is known to have held at the book.
+              - Same state as shown: a confirmation (that feed's lag is recorded). In effect
+                before knownAt: older, rejected. Otherwise: newer, shown (first copy wins).
+              - FD pushes (whole seconds) are matched by position in the last 64 shown states: a
+                re-report of an earlier occurrence is a late copy, rejected.
+              - A feed repeating the state it last reported is another delivery of one
+                observation (each box reports it as a sample and as a change; a resync re-sends
+                it): a duplicate, never judged again.
+              - Every 1 s: heal when every healthy feed has held one other state for 3 s; fail
+                over when the shown value's feed turns unhealthy. A quote is removed only when no
+                healthy feed lists it; if every feed is unhealthy, the last value stays, stale.
+Alternatives: - Last write wins: rejected; rollbacks.
+              - Blocking any value shown before (the plan's 15 s superseded set): removed. It
+                delays genuine reversals in oscillating prices (also FD-7).
+              - "This feed is in sync, accept its next change": removed. Polls make the board
+                skip states, so value matching can't prove sync: 31-69 rollbacks in simulation.
+              - Primary feed with fallback: rejected; it discards Box B's wins (D-33).
+Evidence:     Simulation, 400 seeded runs with bursts and dropped push frames: 0 rollbacks, all
+              converge; ~3% of FD states shown late (p50 224 / p90 524 ms) while an ambiguous
+              push waits for a poll. Live FD replay (180 s, 70 in-play markets, 2,910 channel
+              reports): 1,544 states, 0 flips, 633 of 1,378 shown before push delivered them
+              (mean 274 ms earlier), 2 late (595 ms); push alone: 312 late (README The board;
+              test/replay.test.ts). Drill with Box B's link held 2 s behind (D-40): before the
+              repeat rule, 20 of 958 shown changes came from B, old prices put back (a late
+              copy's second delivery passed when FD's whole-second times tied); after it, 0 of
+              942. test/feedMerge.test.ts covers it; the replay numbers are unchanged.
+Trade-offs:   A genuine revert first seen only by a lagging feed shows up to 3 s late (heal).
+              A poll carries no book time, so a poll answered late from a stale replica looks
+              like a genuine reversal and shows until the next on-time report (<= 0.5 s with
+              staggered feeds; reproduced against QuoteMerge). SMP served 0 stale reads in 297
+              differing observations (README Latency).
+Revisit if:   /api/health shows heals or late copies piling up in live windows.
+Where:        src/server/feedMerge.ts, src/server/board.ts; scripts/replay-merge.ts; README "The
+              board: two feeds, one view".
+
+----------------------------------------------------------------------------------------------------
+D-36  Staggered FanDuel polling on wall-clock phases
+Status: Accepted 2026-10-19; Pending evidence (Phase 6) | PDF: Key Concept 2 | Owner: user + Claude
+Context:      The PDF: "If polling is the best you can do, justify the interval and show us what
+              it costs in latency." One poll per second per IP is our ceiling (D-16).
+Decision:     pollPhaseMs: polls fire at phase + k x 1 s on the wall clock, Box A at phase 0 and
+              Box B at 500 ms (FD_POLL_PHASE_MS). The next delay is computed from the clock, so
+              timer lateness never accumulates. Both boxes are chrony-synced, so they stay
+              interleaved: 2 polls/s across 2 IPs, each IP still at 1/s.
+Alternatives: - Chained timers measured from the previous poll (the connector's first version):
+                rejected for two boxes. Drift would let both polls slide onto the same instant
+                and waste the second (review F8).
+              - 0.5 s polling from one IP: rejected; it doubles one IP's rate (D-16).
+Evidence:     What polling costs: a 5 s poll adds ~2.5 s average staleness (README Latency); at
+              1 s from one box, SMP was still first on 151 of 337 changes (D-13). Interleaving:
+              test/pollPhase.test.ts; in the logs: Phase 4. Box B's first-copy share: Pending
+              evidence (Phase 6).
+Trade-offs:   Depends on clock sync (chrony on both boxes: ~1 us on 2026-10-19; ample).
+Revisit if:   FD rate-limits us, or push becomes reliably first (then relax polling).
+Where:        src/books/fanduel.ts (pollPhaseMs); src/server/config.ts;
+              deploy/board.env.example, deploy/feed.env.example (FD_POLL_PHASE_MS 0 / 500).
+
+----------------------------------------------------------------------------------------------------
+D-37  Build and run on Box A; edit and unit-test on the dev VPS
+Status: Accepted 2026-10-19 | PDF: Key Concept 3; Final Output | Owner: user
+Context:      DK's Akamai blocks the St. Louis dev VPS's IP (DK-1), so DK can't be developed or
+              tested there. Reviewers in Canada can't reach the US book APIs either.
+Decision:     Builds, hosting and every run that needs DraftKings happen on Box A (Akamai blocks
+              the dev VPS). Code is edited and unit-tested on the dev VPS and synced by
+              deploy/deploy.sh; the dev UI on Box A is reached over an SSH tunnel (ssh -L
+              5173:localhost:5173). For everyone else: npm run dev:remote
+              (Vite only, with VITE_API_TARGET set to the public URL and proxied server-side, so
+              it works from Canada with no CORS) or BOOKS=fake (a seeded random walk).
+Alternatives: - Develop on the St. Louis VPS through a DK proxy: rejected. A proxy would sit in
+                every dev measurement, and it is the last-resort fallback, not a convenience.
+              - Develop locally against fakes only: rejected; real-book behaviour (line moves,
+                DK frame order) is what needs testing.
+Evidence:     DK-1 (St. Louis gets 403 on every DK host); DK verified live on Box A (README
+              Status).
+Trade-offs:   Builds share Box A's CPU with the live board; headroom for this is one reason it
+              is a t3.medium (README Hosting).
+Revisit if:   Builds show up in measured latency; then build elsewhere and ship artifacts.
+Where:        package.json (dev, dev:remote), web/vite.config.ts, src/server/fake.ts; README
+              "Running the connectors locally", "Running the app" (with the Canada note).
+
+----------------------------------------------------------------------------------------------------
+D-38  systemd + Caddy, not Docker
+Status: Accepted 2026-10-19 | PDF: Final Output | Owner: user
+Context:      Two small boxes running one Node service each, plus Caddy on Box A. The boxes carry
+              no system packages: Node is a checksum-verified tarball (D-31).
+Decision:     systemd units, all Restart=always: odds-board.service (ROLE=board, env in
+              /etc/odds/board.env, HTTP on 127.0.0.1:8080, feed link on the private IP:7070),
+              odds-feed.service on Box B (ROLE=feed, env in /etc/odds/feed.env), caddy.service
+              (Caddy 2.11.7, a static binary checked against its release checksums, run as its
+              own user). deploy/deploy.sh syncs the source to Box A, runs npm ci and the build
+              there, and ships dist/ to Box B, which only runs npm ci --omit=dev: Box B never
+              builds.
+              - No addresses in git or in public responses: deploy.sh reads its hosts from a
+                gitignored deploy/hosts.env; the env templates say <box-a-private-ip>, which
+                --setup fills on the box; the feed token exists only in /etc/odds/*.env (0600).
+                /api/health dropped Box B's VPC address (README B-7); the logs keep it.
+Alternatives: - Docker: rejected. It means installing a container engine as a system package on
+                both boxes to run two Node processes, with nothing to isolate that systemd can't
+                already restart and supervise.
+              - PM2: rejected; another dependency doing systemd's job.
+              - Building on Box B too: rejected; the t3.micro has 1 GB, and one build keeps
+                both boxes on identical artifacts.
+Evidence:     README Hosting (Node from a tarball, no system packages); deploy/deploy.sh.
+Trade-offs:   Less portable than an image; deploy.sh and the units keep setup reproducible.
+Revisit if:   More boxes, or other people deploying; then containerize.
+Where:        deploy/odds-board.service, deploy/odds-feed.service, deploy/caddy.service,
+              deploy/Caddyfile, deploy/deploy.sh, deploy/*.env.example, .gitignore;
+              src/feedlink/server.ts (status).
+
+----------------------------------------------------------------------------------------------------
+D-39  Credentials that can change: FD keys re-read from the live bundle, DK anonymous-JWT fallback
+Status: Accepted 2026-10-19 | PDF: Key Concept 3 | Owner: ingestion session
+Context:      D-15 stands: no logins, cookies or sessions, and nothing expires. Two things could
+              still change without warning: FD can rotate its public keys (_ak, PIR client key)
+              with a deploy, and DK could start checking the socket jwt it ignores today. The PDF
+              asks how the system recovers without a human.
+Decision:     - FD: a rejected key is recognised by its exact signature. sbapi answers
+                {"error":true} with 404 (board), 500 (in-play) or 400 (missing key); PIR answers
+                connection_error UnauthorizedException (401). The connector then re-reads FD's
+                live bundle (/sw.js -> /static/js/main.<hash>.js), extracts every candidate key,
+                adopts the first one the live API accepts, and retries discovery or reconnects
+                push at once. At most one re-read per 5 min (30 s after a failed download). SMP
+                needs no key, so prices keep flowing at 1 s meanwhile (FD shown degraded, with
+                the reason).
+              - DK: two subscription refusals in a row (an error frame, an unsubscribe right after
+                subscribing, or close 4000) switch the socket from "default-token" to DK's
+                anonymous enterprise JWT (generateAnonymousEnterpriseJWT: no cookies, 120 s). It
+                is sent in the URL and the subscribe, and renewed at 90% of its life with 3 tries
+                2 s apart, as DK's own client does. A refusal in JWT mode fetches a fresh token
+                before reconnecting; other reconnects reuse the current one. A refusal, a 4000
+                close included, retries on the normal backoff with no floor, because the retry
+                changes the token.
+Alternatives: - Start DK on the JWT: rejected. DK's site sends "default-token", it works today,
+                and the JWT adds a token request and a renewal loop for no gain while DK checks
+                nothing. The fallback is one switch away.
+              - Hard-coded keys and an alert for a human: rejected. The PDF asks for recovery
+                without one, and the keys are public in a bundle we can read (FD-1).
+              - A headless browser that picks up whatever the site uses: rejected (D-15). It is
+                heavy, and it walks into PerimeterX on the HTML.
+Evidence:     Measured 2026-10-19.
+              - FD failure signatures: wrong _ak -> 404 {"error":true} (board), 500 (in-play);
+                missing -> 400; wrong PIR key -> connection_error UnauthorizedException 401.
+              - FD live run from St. Louis with both keys wrong: current keys adopted 0.95 s after
+                start, push connected 0.17 s later, 15 games / 90 quotes live.
+              - DK on Box A: "default-token", an anonymous JWT, a garbage string and no jwt were
+                all subscribed. The connector in JWT mode fetched its token in 0.3 s and went
+                live 410 ms after connecting (15 games, 90 quotes). Side by side for 25 s, a JWT
+                socket and a default-token socket received identical frames (2 updates, 1
+                selection change each).
+              - DK mock that refuses "default-token": live again within 0.7 s of the first
+                refusal. A 1011 close in JWT mode reconnected in 211 ms on the cached token.
+              - DK's client code: getTokenRenewTimeout(e) = 1e3*(e-10*e/100), 3 tries 2 s apart;
+                on a subscription error it refreshes the token and resubscribes
+                (refreshTokenAndReInit); updateToken writes url.queryParams.jwt.
+Trade-offs:   Learned keys live in memory: after a restart the first rejection repeats the refresh
+              (about 1-2 s). The extractor depends on the bundle's shape (the key maps and the
+              AppSync config); if FD restructures it, the refresh adopts nothing, the status says
+              the key is rejected, and a human updates the pattern. The DK fallback is verified
+              against a mock and in JWT mode live, but DK's real refusal format is unknown,
+              because DK refuses nothing today.
+Revisit if:   A refresh adopts nothing while FD keeps rejecting (pattern drift), or DK starts
+              refusing "default-token" (then start on the JWT).
+Where:        src/books/fanduel.ts (refreshKeys, readKeysFromBundle, isKeyRejection);
+              src/books/draftkings.ts (onTokenRejected, renewJwt, DEFAULT_TOKEN);
+              src/scripts/watch.ts (FD_APP_KEY, FD_PIR_KEY, DK_TOKEN_MODE); README "Cookies,
+              tokens and sessions", DK-4, FD-15.
+
+----------------------------------------------------------------------------------------------------
+D-40  Synthetic books are one book across processes; the failure drills run on them
+Status: Accepted 2026-10-19 | PDF: Goal; Key Concept 5 | Owner: Claude (build)
+Context:      The drills, two-feed local runs and the load test need two feeds over one book, as
+              Box A and Box B see one real book. Each fake process used to walk prices on its
+              own, so a second feed was a different book lagging by its start time: the merge
+              took its older prices as new (fresh book times) and the board flip-flopped.
+              Breaking real books on purpose would risk the live board and our IPs' standing.
+Decision:     - Fake prices are a pure function of (seed, book, wall-clock tick). Tick k changes
+                one market, picked and priced by k's seeded draws around the market's opening
+                (line +/- 0.5, fair probability +/- 3 points). Ticks fire on wall-clock
+                multiples of 1000/FAKE_RATE ms and a late timer replays the ticks it missed. A
+                process that starts late restores each market's latest change by looking back.
+              - Book times keep the real resolutions: DK the tick - 40 ms, FD whole seconds on
+                push, none on poll. Kickoffs hang off the UTC day. Misbehavior (fail, freeze,
+                garbage, massRemove) stays per process.
+              - scripts/drills.ts (npm run drills) starts a board and a feed process linked over
+                TCP, breaks one thing at a time (crash, hang, a stopped book, a 2 s link lag via
+                a delaying proxy, bad prices, a mass removal, a frozen feed) and times what
+                /api/health, /api/board and the stream show.
+Alternatives: - A shared walk behind a coordinator process: rejected; a service just for a fake.
+              - Replaying a recording: kept for the merge tests (test/fixtures), but it is
+                finite and FD-only; drills and local runs need both books indefinitely.
+              - Drills against the real books in production: only the safe one (stopping Box B,
+                D-25); CHAOS is refused in production.
+Evidence:     test/fake.test.ts: a connector started 5 s later holds the same prices, then
+              reports the same changes with the same book times (both books). Drills: 11 of 11
+              pass after two fixes they prompted (D-25, D-35); README "The board".
+Trade-offs:   Fake prices wander inside a band around each opening instead of drifting; a
+              change reaches FD's push or poll channel, never both, so the board's push/poll
+              race is only exercised by the live replay (D-35). Processes started on different
+              UTC days disagree on kickoffs.
+Revisit if:   A drill needs per-feed source lag or dropped frames (only link lag is modelled).
+Where:        src/server/fake.ts, test/fake.test.ts, scripts/drills.ts, scripts/load-sse.ts;
+              README "The board: two feeds, one view", "Running the app".
+
+====================================================================================================
+END OF LOG. New decisions get the next free ID (D-41 onward), a row in the INDEX, and a date.
+====================================================================================================

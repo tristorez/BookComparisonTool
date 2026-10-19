@@ -1,0 +1,21 @@
+# Box B: feed B → Box A over the private feed link.  Install: sudo cp deploy/odds-feed.service /etc/systemd/system/
+[Unit]
+Description=NFL odds feed (feed role, feed B)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/odds
+EnvironmentFile=/etc/odds/feed.env
+ExecStart=/home/ec2-user/.local/node/bin/node dist/feed/index.js
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/ec2-user/odds
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

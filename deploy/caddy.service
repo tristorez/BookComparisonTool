@@ -1,0 +1,21 @@
+# Box A: Caddy (static binary in /usr/local/bin).  Install: sudo cp deploy/caddy.service /etc/systemd/system/
+[Unit]
+Description=Caddy (TLS edge for the odds board)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+Environment=XDG_DATA_HOME=/var/lib
+Environment=XDG_CONFIG_HOME=/etc
+ExecStart=/usr/local/bin/caddy run --environ --config /etc/caddy/Caddyfile --adapter caddyfile
+ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile --force
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+# Box A: board + site + feed A.  Install: sudo cp deploy/odds-board.service /etc/systemd/system/
+[Unit]
+Description=NFL odds board (board role, feed A)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/odds
+EnvironmentFile=/etc/odds/board.env
+ExecStart=/home/ec2-user/.local/node/bin/node dist/server/index.js
+Restart=always
+RestartSec=2
+# Long-lived connections: one file descriptor per SSE viewer.
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/home/ec2-user/odds
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

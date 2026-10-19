@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/* Dark navy surfaces with a green accent. Every text color below keeps at least 4.5:1 against every
+   surface it sits on, including the hatched pattern (faint: 4.7:1 there, 5.9:1 on a card). */
+@theme {
+  --color-navy-950: #070c18; /* page */
+  --color-navy-900: #0c1528; /* game card */
+  --color-navy-850: #111c34;
+  --color-navy-800: #16213b; /* chips, toggle */
+  --color-navy-700: #1f2c4a; /* tooltip */
+  --color-ink: #e8eef8; /* primary text */
+  --color-muted: #a3b1c6; /* secondary text */
+  --color-faint: #8494ad; /* tertiary text */
+  --color-accent: #2fd681; /* Betstamp-style green */
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    background-color: var(--color-navy-950);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--color-navy-950);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Price-move flash: green when the move favors the bettor, red when it doesn't. The price element is
+   re-keyed by a per-cell move counter, so each move mounts a fresh element and replays the animation;
+   there are no per-cell timers. Only the background animates, so text keeps its own color; at the peak
+   tint ink is 9:1 and muted text 4.9:1. */
+@keyframes price-up {
+  0%,
+  15% {
+    background-color: rgb(34 197 94 / 0.28);
+    box-shadow: 0 0 0 1px rgb(74 222 128 / 0.55);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 1px transparent;
+  }
+}
+
+@keyframes price-down {
+  0%,
+  15% {
+    background-color: rgb(239 68 68 / 0.3);
+    box-shadow: 0 0 0 1px rgb(248 113 113 / 0.55);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 1px transparent;
+  }
+}
+
+.flash-up {
+  animation: price-up 1.6s ease-out;
+}
+
+.flash-down {
+  animation: price-down 1.6s ease-out;
+}
+
+/* Quotes that are not used for Best Price (stale, suspended, pre-game line on a live game, check). */
+.hatched {
+  background-image: repeating-linear-gradient(135deg, rgb(148 163 184 / 0.14) 0 3px, transparent 3px 7px);
+}

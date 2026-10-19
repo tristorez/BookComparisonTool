@@ -1,0 +1,9 @@
+# Box A edge: automatic TLS for the Elastic IP's sslip.io name, HTTP/2 + HTTP/3, reverse proxy to the
+# board on localhost. Caddy recognizes text/event-stream and flushes every write, so SSE frames are not
+# buffered. No `encode` here: the app compresses everything except the stream itself (Decisions.txt D-09),
+# and there is no ALB/CloudFront in front (either can buffer SSE).
+{$SITE_HOST:18-227-249-43.sslip.io} {
+	reverse_proxy 127.0.0.1:8080 {
+		flush_interval -1
+	}
+}

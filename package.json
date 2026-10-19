@@ -1,0 +1,60 @@
+{
+  "name": "betstamp-odds",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Real-time NFL odds comparison: DraftKings vs FanDuel",
+  "type": "module",
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "scripts": {
+    "watch:fd": "tsx src/scripts/watch.ts fanduel",
+    "watch:dk": "tsx src/scripts/watch.ts draftkings",
+    "watch": "tsx src/scripts/watch.ts",
+    "probe": "node scripts/probe-egress.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.check.json && tsc --noEmit -p web/tsconfig.json",
+    "dev": "concurrently -k -n server,web -c blue,magenta \"tsx watch src/server/index.ts\" \"vite --config web/vite.config.ts\"",
+    "dev:server": "tsx watch src/server/index.ts",
+    "dev:web": "vite --config web/vite.config.ts",
+    "dev:remote": "vite --config web/vite.config.ts --mode remote",
+    "dev:feed": "tsx watch src/feed/index.ts",
+    "build": "npm run build:web && npm run build:server",
+    "build:web": "vite build --config web/vite.config.ts",
+    "build:server": "tsc -p tsconfig.json",
+    "start": "node dist/server/index.js",
+    "start:feed": "node dist/feed/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "push-table": "tsx scripts/build-push-table.ts",
+    "measure": "tsx scripts/measure-e2e.ts",
+    "drills": "tsx scripts/drills.ts",
+    "load": "tsx scripts/load-sse.ts"
+  },
+  "dependencies": {
+    "@fastify/compress": "^9.2.2",
+    "@fastify/static": "^10.1.6",
+    "fastify": "^5.12.7",
+    "https-proxy-agent": "^7.0.6",
+    "undici": "^7.30.1",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.6",
+    "jsdom": "^30.1.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
+  }
+}

@@ -76,7 +76,7 @@ npm run build && npm start   # production build: one Node process serves the API
 
 Settings are environment variables read by `src/server/config.ts`; [`.env.example`](.env.example) lists the
 main ones, and the board also reads a local `.env` (gitignored; the environment wins). `deploy/deploy.sh`
-builds on Box A and rolls out to both boxes (`deploy/` has the systemd units and the Caddyfile; the hosts go
+ships the committed `HEAD`, builds it on Box A and rolls out to both boxes (`deploy/` has the systemd units and the Caddyfile; the hosts go
 in a gitignored `deploy/hosts.env`).
 
 **Viewing and running from Canada.** The live URL works from anywhere. Its prices are both books' **New

@@ -1184,7 +1184,8 @@ Decision:     systemd units, all Restart=always: odds-board.service (ROLE=board,
               /etc/odds/board.env, HTTP on 127.0.0.1:8080, feed link on the private IP:7070),
               odds-feed.service on Box B (ROLE=feed, env in /etc/odds/feed.env), caddy.service
               (Caddy 2.11.7, a static binary checked against its release checksums, run as its
-              own user). deploy/deploy.sh syncs the source to Box A, runs npm ci and the build
+              own user). deploy/deploy.sh syncs the committed HEAD (git archive, so another
+              session's uncommitted edits never ship) to Box A, runs npm ci and the build
               there, and ships dist/ to Box B, which only runs npm ci --omit=dev: Box B never
               builds.
               - No addresses in git or in public responses: deploy.sh reads its hosts from a

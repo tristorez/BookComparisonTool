@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build on Box A and roll out to both boxes (Decisions.txt D-37/D-38).
-#   deploy/deploy.sh            # sync, build on A, ship to B, restart both
+#   deploy/deploy.sh            # sync HEAD, build on A, ship to B, restart both
 #   deploy/deploy.sh --setup    # first time: also install Caddy, units and env files (idempotent)
 #   SKIP_WEB=1 deploy/deploy.sh # server only (no web build)
 # Hosts come from deploy/hosts.env (gitignored; copy deploy/hosts.env.example) or the environment.
@@ -14,9 +14,10 @@ KEY=${SSH_KEY:-$HOME/.ssh/id_ed25519}
 ssh_() { ssh -i "$KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=15 "$@"; }
 NODE='export PATH=$HOME/.local/node/bin:$PATH'
 
-echo "==> sync source to Box A ($A)"
-tar -C "$ROOT" --exclude=node_modules --exclude=dist --exclude=.git --exclude='*.pdf' --exclude='.env' --exclude='.env.local' --exclude='hosts.env' -czf - . \
-  | ssh_ "$A" 'mkdir -p ~/odds && tar -xzf - -C ~/odds'
+# Only committed code ships: several sessions edit this tree, and HEAD is what was reviewed and pushed.
+echo "==> sync $(git -C "$ROOT" rev-parse --short HEAD) to Box A ($A)"
+[[ -z "$(git -C "$ROOT" status --porcelain --untracked-files=no)" ]] || echo "    (uncommitted changes are not deployed; commit them first)"
+git -C "$ROOT" archive --format=tar HEAD | gzip | ssh_ "$A" 'mkdir -p ~/odds && tar -xzf - -C ~/odds'
 
 echo "==> build on Box A"
 BUILD=${SKIP_WEB:+build:server}

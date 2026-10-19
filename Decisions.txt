@@ -1307,19 +1307,22 @@ Context:      The brief: normalize both books and show them "as a side-by-side c
               be cramped on a phone and grow with every book.
 Decision:     - The board stays as it is: per side, the best price and its book.
               - Clicking a game (or its Compare link) opens ?game=<key>: per market, a table with
-                a column per book from the server's book list, a Best column naming the book and
-                how the pick was made, the best price starred in its book's column, each book's
-                hold (the implied probabilities of its two prices minus 100%), and the reasoning
-                for picks across different lines written out.
+                the sportsbooks down the left (a row per book from the server's book list, so a
+                new book adds a row and the table stays four columns wide on a phone), the two
+                sides as columns, each book's hold (the implied probabilities of its two prices
+                minus 100%), the best price starred, a Best row naming the book and how the pick
+                was made, and the reasoning for picks across different lines written out.
               - It is a history entry: Back returns to the board at the same scroll position. The
                 view toggle hides there, since every book is listed.
               - Cells reuse the book view's cell: the same flash, previous price and hatching.
 Alternatives: - Book columns on the board itself: the user chose to keep the board simple.
+              - Books as columns on the game page (its first version): replaced at the user's
+                request; columns grow sideways with every book and crowd a phone.
               - A modal or an expanding row: rejected; a page has its own URL, can be shared, and
                 works with Back.
-Evidence:     web/src/components/GameDetail.test.tsx (a column per book, the star, the Best
-              column, holds, notes, a live flash, a direct link, Back restoring the board's
-              scroll); web/src/lib/odds.test.ts (marketHold).
+Evidence:     web/src/components/GameDetail.test.tsx (a row per book, a third book as a third
+              row, the star, the Best row, holds, notes, a live flash, a direct link, Back
+              restoring the board's scroll); web/src/lib/odds.test.ts (marketHold).
 Trade-offs:   One more click to see every book; the board keeps the muted other price as a hint.
 Revisit if:   Viewers want the full comparison on the board itself (e.g. a desktop-only layout).
 Where:        web/src/components/GameDetail.tsx, web/src/components/GameRow.tsx (Compare link,

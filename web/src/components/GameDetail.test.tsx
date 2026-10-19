@@ -46,56 +46,79 @@ function fullStore(): OddsStore {
 }
 
 const section = (name: string) => screen.getByRole('region', { name });
-const rows = (el: HTMLElement) => [...el.querySelectorAll('tbody tr')] as HTMLElement[];
-const cell = (row: HTMLElement, view: string) => row.querySelector(`[data-cell="${view}"]`)!.textContent;
+/** The text of one book's price for one side. */
+const price = (el: HTMLElement, book: string, side: string) => el.querySelector(`tr[data-book="${book}"] td[data-side="${side}"] [data-cell]`)!.textContent;
+const best = (el: HTMLElement, side: string) => el.querySelector(`tr[data-best-row] td[data-side="${side}"] [data-cell="best"]`)!;
 const hold = (el: HTMLElement, book: string) => el.querySelector(`[data-hold="${book}"]`)!.textContent;
+/** Visible labels: a tooltip's text sits in the DOM beside its trigger, so it is left out. */
+const texts = (els: HTMLElement[]) =>
+  els.map((e) => {
+    const copy = e.cloneNode(true) as HTMLElement;
+    for (const tip of copy.querySelectorAll('[role="tooltip"]')) tip.remove();
+    return copy.textContent;
+  });
 
 describe('GameDetail', () => {
-  it('lists every book side by side per market, stars the best price, and shows each hold', () => {
+  it('lists the sportsbooks down the left with both sides of each market, stars the best price, and shows each hold', () => {
     withStore(fullStore(), <GameDetail gameKey={GAME} onBack={() => {}} />);
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Pittsburgh Steelers at New Orleans Saints');
     expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Spread', 'Total', 'Moneyline']);
 
     const spread = section('Spread');
-    const [pit, no] = rows(spread);
-    expect(cell(pit!, 'draftkings')).toBe('+3 −115★');
-    expect(cell(pit!, 'fanduel')).toBe('+2.5 −102');
-    expect(cell(no!, 'draftkings')).toBe('−3 −105');
-    expect(cell(no!, 'fanduel')).toBe('−2.5 −120★');
-    // The Best column names the book and how the pick was made, without repeating the other books.
-    expect(pit!.querySelector('[data-cell="best"] [data-book-names]')!.textContent).toBe('Best at DK');
-    expect(pit!.querySelector('[data-cell="best"] [data-method]')!.textContent).toBe('est.');
+    expect(texts(within(spread).getAllByRole('columnheader'))).toEqual(['Sportsbook', 'PIT Steelers', 'NO Saints', 'Hold']);
+    expect(texts(within(spread).getAllByRole('rowheader'))).toEqual(['DraftKings', 'FanDuel', 'Best']);
+    expect(price(spread, 'draftkings', 'away')).toBe('+3 −115★');
+    expect(price(spread, 'fanduel', 'away')).toBe('+2.5 −102');
+    expect(price(spread, 'draftkings', 'home')).toBe('−3 −105');
+    expect(price(spread, 'fanduel', 'home')).toBe('−2.5 −120★');
+    // The Best row names the book and how the pick was made, without repeating the other books.
+    expect(best(spread, 'away').querySelector('[data-book-names]')!.textContent).toBe('Best at DK');
+    expect(best(spread, 'away').querySelector('[data-method]')!.textContent).toBe('est.');
+    expect(best(spread, 'home').querySelector('[data-book-names]')!.textContent).toBe('Best at FD');
     expect(spread.querySelector('[data-other]')).toBeNull();
     expect(hold(spread, 'draftkings')).toBe('4.7%');
     expect(hold(spread, 'fanduel')).toBe('5.0%');
-    expect([...spread.querySelectorAll('[data-note]')].map((n) => n.textContent)).toEqual([
+    expect(texts([...spread.querySelectorAll<HTMLElement>('[data-note]')])).toEqual([
       'est. PIT: Est. return per $1: 0.975 vs 0.935',
       'est. NO: Est. return per $1: 0.967 vs 0.943',
     ]);
 
     const total = section('Total');
-    expect(rows(total).map((r) => r.querySelector('th')!.textContent)).toEqual(['Over', 'Under']);
-    expect(cell(rows(total)[1]!, 'fanduel')).toBe('u44.5 −108★');
+    expect(texts(within(total).getAllByRole('columnheader'))).toEqual(['Sportsbook', 'Over', 'Under', 'Hold']);
+    expect(price(total, 'fanduel', 'under')).toBe('u44.5 −108★');
     expect(hold(total, 'draftkings')).toBe('4.8%');
     expect(total.querySelector('[data-note]')).toBeNull();
 
     const ml = section('Moneyline');
-    expect(cell(rows(ml)[0]!, 'fanduel')).toBe('+155★');
+    expect(price(ml, 'fanduel', 'away')).toBe('+155★');
     expect(hold(ml, 'draftkings')).toBe('3.0%');
     expect(hold(ml, 'fanduel')).toBe('2.9%');
   });
 
-  it('updates live: a moved price flashes in its own book column', () => {
+  it('grows downward: another sportsbook in the registry is another row', () => {
+    const store = fullStore();
+    const betmgm = { id: 'betmgm', name: 'BetMGM', short: 'MGM', color: '#c0a062' } as never;
+    act(() => {
+      store.applySnapshot(snapshot({ books: [...snapshot().books, betmgm], quotes: [quote('draftkings')], bests: [pick()] }));
+    });
+    withStore(store, <GameDetail gameKey={GAME} onBack={() => {}} />);
+    const spread = section('Spread');
+    expect(texts(within(spread).getAllByRole('rowheader'))).toEqual(['DraftKings', 'FanDuel', 'BetMGM', 'Best']);
+    expect(within(spread).getAllByRole('columnheader')).toHaveLength(4);
+    expect(screen.getByText(/3 sportsbooks compared/)).toBeTruthy();
+  });
+
+  it('updates live: a moved price flashes in its own book\'s row', () => {
     const store = fullStore();
     withStore(store, <GameDetail gameKey={GAME} onBack={() => {}} />);
     act(() => {
       store.applyDelta(delta(11, { quotes: [quote('draftkings', { side: 'home', line: -3, american: -102, prev: { american: -105, line: -3, at: Date.now() } })] }), { live: true });
       store.flush();
     });
-    const no = rows(section('Spread'))[1]!;
-    expect(cell(no, 'draftkings')).toContain('−3 −102');
-    expect(no.querySelector('[data-cell="draftkings"] [data-flash="up"]')).not.toBeNull();
-    expect(no.querySelector('[data-cell="fanduel"] [data-flash]')).toBeNull();
+    const spread = section('Spread');
+    expect(price(spread, 'draftkings', 'home')).toContain('−3 −102');
+    expect(spread.querySelector('tr[data-book="draftkings"] td[data-side="home"] [data-flash="up"]')).not.toBeNull();
+    expect(spread.querySelector('tr[data-book="fanduel"] [data-flash]')).toBeNull();
   });
 
   it('says it is connecting, then that the game left the board', () => {

@@ -771,13 +771,14 @@ unchanged `reason` text).
 - **Best view:** the best line and price with the book underneath (both books on a tie), the `est.` or
   `by line` label beside the book name when the lines differ, and the other book's price shown muted.
 - **Book views:** that book's prices, with ★ where it holds the best price.
-- **Game page (the side-by-side comparison):** click a game, or its **Compare ›** link, to open it
-  (`?game=`, so it can be linked to and Back returns to the board where it was). Each market is a table
-  with one column per book, built from the server's book list like the toggle, plus a **Best** column
-  that names the book. The best price is starred in its book's column. Each book's **hold** (its margin
-  on the market; lower is better for bettors) sits under its column. Picks made across different lines
-  show their reasoning (`est. NO: Est. return per $1: 0.967 vs 0.943`). The board stays simple, one best
-  price and its book per side, and the game page is the full comparison.
+- **Game page (the comparison):** click a game, or its **Compare ›** link, to open it (`?game=`, so it
+  can be linked to and Back returns to the board where it was). Each market is a table with the
+  **sportsbooks down the left**: one row per book from the server's book list, so a new book adds a row,
+  not a column. The market's two sides are the columns, then each book's **hold** (its margin on the
+  market; lower is better for bettors). The best price is starred in its book's row, and a **Best** row
+  names the book. Picks made across different lines show their reasoning (`est. NO: Est. return per $1:
+  0.967 vs 0.943`). The board stays simple, one best price and its book per side; the game page is the
+  full comparison.
 - **Price moves flash** green (better for the bettor) or red, with the previous price struck through for
   5 s. Snapshots, view switches, returning to the tab, reconnect catch-up and eligibility changes never
   flash.

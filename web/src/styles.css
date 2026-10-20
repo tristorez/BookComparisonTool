@@ -6,8 +6,8 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --color-navy-950: #0e0f11; /* page */
   --color-navy-900: #151619; /* game card */
-  --color-navy-850: #1a1b1f;
-  --color-navy-800: #212227; /* chips, toggle */
+  --color-navy-850: #1a1b1f; /* unused since the restyle */
+  --color-navy-800: #212227; /* logo tile */
   --color-navy-700: #2a2b31; /* tooltip */
   --color-ink: #ececee; /* primary text */
   --color-muted: #a8a9b0; /* secondary text */
@@ -34,7 +34,9 @@
 /* Price-move flash: green when the move favors the bettor, red when it doesn't. The price element is
    re-keyed by a per-cell move counter, so each move mounts a fresh element and replays the animation;
    there are no per-cell timers. Only the background animates, so text keeps its own color; at the peak
-   tint ink is 9:1 and muted text 4.53:1. */
+   tint on a card ink is 9:1 and muted text 4.53:1. The one exception to the 4.5:1 rule above: a dimmed
+   (ineligible) price flashing over the hatched pattern dips to 3.7:1 (green) / 4.4:1 (red) at the peak,
+   back above 4.5:1 within ~0.6 s / ~0.3 s as the tint fades. */
 @keyframes price-up {
   0%,
   15% {

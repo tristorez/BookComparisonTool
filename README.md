@@ -4,7 +4,7 @@ A live best-price board for NFL moneyline, spread and total (pregame and in-play
 FanDuel, normalized into one model and pushed to the browser as lines move.
 
 - **Live:** https://18-227-249-43.sslip.io
-- **Code:** https://github.com/tristorez/OddsComparisonTool
+- **Code:** https://github.com/tristorez/BookComparisonTool
 
 The board has a Best Price / DraftKings / FanDuel toggle, flashes prices that just changed, shows each
 book's freshness, and says so when a book's data is stale.

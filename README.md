@@ -94,16 +94,36 @@ headers (±0.15 s). The browser beacons its own legs (server → browser, paint)
 | FD push, book → backend (St. Louis, 143 markets, pregame) | p50 ~1.0 s raw (upper bound: `updatedAt` is truncated to the second; truncation-corrected ≈0.5 s) |
 | FD, who shows a change first (Ohio, live, 337 changes) | push 182 · poll 151 · GraphQL 4; the poll led push by p50 235 ms on 288 of 297 differing observations |
 | FD merge vs push alone (recorded live session) | 45% of new states shown earlier, mean 249 ms; 0 backward moves |
-| FD poll-interval cost (replay, 773 states) | push only mean 102 ms / p90 355 ms; poll only 1 s 147 / 464 ms; poll only 5 s (FD's own site) 1.8 s / 4.0 s; **push + 1 s poll (shipped) is the reference**; push + 2 s poll +50 ms; push + 5 s poll +81 ms |
+| FD poll-interval cost (replay, 773 states) | push only mean 102 ms / p90 355 ms (misses 1.4% of states); poll only 1 s 147 / 464 ms; poll only 5 s (FD's own site) 1.8 s / 4.0 s; **push + 1 s poll (shipped) is the reference**; push + 2 s poll +50 ms; push + 5 s poll +81 ms |
 | FD poll cost | one ~3.4 KB gzipped request per second per box |
 | DK socket / bootstrap (AWS Ohio) | subscribe → subscribed 35–63 ms; live 250–540 ms from start |
 | Backend → browser (public URL, pregame smoke test) | first byte 30 ms; delta emit → receive p50 10 ms (n = 3) |
 | Load: 500 viewers at ~18 deltas/s | 0 drops; emit → receive 44 / 158 / 460 ms (p50 / p90 / p99) |
 
-**Not yet measured:** DraftKings book → backend per frame, and live (in-play) per-book end-to-end
-figures, need real line movement. The Monday-night run (WAS @ SF, 3 hours, from the St. Louis dev server,
-so not a Canadian vantage) was in progress when this was written; its raw output is in `docs/latency/`.
-FD timestamps are whole seconds, so FD ages carry up to 1 s of truncation.
+**Game night: WAS @ SF, 2026-10-19 (8:00 pm ET, ~86 minutes live).** Book → our server, from the board on AWS
+(every frame, p50 / p90 / p99, ms). FD's whole-second timestamps make its figures upper bounds.
+
+| Book | Phase | p50 | p90 | p99 |
+|---|---|---|---|---|
+| DraftKings | pregame (216 frames) | 73 | 1,449 | 4,629 |
+| DraftKings | **live** (2,314) | **1,186** | 2,509 | 7,124 |
+| FanDuel push | pregame (97) | 1,042 | 1,451 | 1,602 |
+| FanDuel push | **live** (929) | **968** | 1,366 | 1,847 |
+
+- **DK's time is DK's.** Live, engine → publish is p50 1,097 ms; gateway → us is 19 ms (p99 109 ms); our
+  processing is ~1 ms. The delay is DraftKings' pricing pipeline holding a change before it publishes.
+- **FD direct** (dev server, 84 min): push p50 727 ms, p90 990 ms (502 changes); the 1 s poll was first on
+  a large share of changes, which is why both channels run.
+- **Two feeds racing:** the second copy of a price trails the first by p50 32 ms (DK) and 330 ms (FD); the
+  box-to-box link adds p50 0 ms.
+- **Backend → browser (live, indicative):** server → browser p50 ~24 ms, paint 1–9 ms. Only 3 clients were
+  connected, so live browser-side samples are few (n = 4–5 per book). DK book → browser live was ≈1.8–2.0 s
+  (n = 4), of which ~1.1 s is DK's own delay.
+- **Health:** 0 aggregator errors, 0 invalid quotes, 0 dropped clients, 0 watchdog restarts; 81
+  older-than-current updates correctly rejected.
+
+Limits: one game, ~86 minutes, measured from the St. Louis dev server (not a Canadian vantage). Raw data is
+in `docs/latency/`.
 
 **What we did to cut latency**
 - Push wherever a book has it: the DK socket and FD's PIR push.
@@ -119,10 +139,24 @@ FD timestamps are whole seconds, so FD ages carry up to 1 s of truncation.
 
 | | DraftKings | FanDuel |
 |---|---|---|
-| **Geo** | Not geofenced (Ohio and Canada hosts read it). Site/state names exist but the jurisdiction is ignored, so we can't say which region its prices represent. | Per-state market-id namespaces, but identical game lines across NJ, 11 other states, Ontario and Alberta. Not geofenced. |
+| **Geo** | Not geofenced by state or country: AWS Ohio, Ashburn and Montréal all got byte-identical answers. We cannot choose a region: every state/province site name (`dkusnj`, `dkcaon`, `dkcaab`, even a made-up `zz`) returned the same bytes, so which jurisdiction its prices represent is unverified. | Region is chosen by hostname (`sbapi.<st>.sportsbook.fanduel.com`; Canada on `.ca`). 25 US states plus Ontario and Alberta answer; the other 26 states and the other provinces have no host. A Missouri IP reads NJ prices. Same keys work everywhere. |
 | **Bot protection** | Akamai on every host. It blocked our Contabo dev server by IP/ASN, and it scores the HTTP client (`fetch` gets 200 where `https.request` gets 403 from the same IP). Solved with AWS `us-east-2` IPs, one HTTP client, and a probe before any host goes live. | PerimeterX on the HTML site only; the API hosts answer normally. The WAF rejects requests with no User-Agent. |
 | **Rate limits** | None hit (one socket, one REST read per minute per box). | None hit (one SMP poll per second, one PIR socket per box). |
 | **Credentials** | `"default-token"`, with a JWT fallback. | Public keys, re-read from the live bundle on rotation. |
+
+**Geo, in more detail (tested 2026-10-19, one pregame snapshot, from AWS Montréal, Ashburn and Ohio).**
+- **Prices don't differ by region.** FanDuel's moneyline, spread and total matched NJ on 90 of 90 runners
+  in 11 other states, Ontario and Alberta, and on the live price endpoint for PA, NY, IL and Ontario.
+  Game props matched too. What differs is market-id namespaces and a few futures (103 markets in NJ and
+  Ontario, 101 in PA/OH, 96 in NY/VA). An Ontario column would show the same prices, so we ship NJ.
+- **Server location didn't change answers.** Canada, US-east-1 and Ohio got the same bytes from both books.
+  Reports that these APIs reject Canadian IPs did not reproduce from an AWS Canada address; we did not
+  test residential or other IP ranges.
+- **What blocks us is IP reputation, not location.** DraftKings' Akamai refused our St. Louis dev server
+  outright while AWS addresses in the same country were fine, so the hosting choice is about reputation
+  (see Bot protection), not geography.
+- **Limits:** one pregame snapshot; no live markets, promos or logged-in prices tested; DraftKings'
+  jurisdiction stays unverified because it ignores the region we request.
 
 When a book refuses us (401/403/429) the refused channel backs off (up to 10 minutes, honouring
 `Retry-After`), the book is reported blocked, and the other book and the second feed box keep the board
@@ -130,8 +164,8 @@ fed. A book that goes down or sends bad data shows as stale in the UI instead of
 numbers.
 
 **With more time**
-- Fill in live (in-play) latency per book end to end, and DK's engine → pipeline → gateway breakdown,
-  from real line movement.
+- Longer latency runs: a full slate, a Canadian vantage point and many more connected clients, to firm up
+  the live browser-side figures.
 - Alerting for the cases that need a human (a book `down` for minutes; a key refresh that adopts nothing).
 - Fixture-based tests for FanDuel's lifecycle, the way the DK replay harness mocks DraftKings.
 - Verify which region DraftKings' feed represents (it ignores the jurisdiction name).

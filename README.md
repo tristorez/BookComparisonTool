@@ -8,7 +8,8 @@ normalizes both books into one model, and serves a live best-price board to the 
 > - **Live at https://18-227-249-43.sslip.io**: the board, Server-Sent Events push, the UI and Box B's
 >   feed link are deployed. See [The board](#the-board-two-feeds-one-view), [Best price](#best-price)
 >   and [Serving](#serving-the-board-server-sent-events); every decision is in
->   [Decisions.txt](Decisions.txt).
+>   [Key decisions](#key-decisions).
+> - **Code: https://github.com/tristorez/OddsComparisonTool**
 > - FanDuel is live 0.2 s after start. DraftKings is live in 0.25–0.55 s.
 > - All 15 games and every side line up one-to-one across the two books.
 > - Every failure path we could script (dead socket, server close, REST outage, bad snapshots,
@@ -45,7 +46,7 @@ normalizes both books into one model, and serves a live best-price board to the 
 
 | The brief asks for | Where |
 |---|---|
-| A live URL and a GitHub repo | Live URL: the status note above. Repo link: added when the repo is published. |
+| A live URL and a GitHub repo | Live URL and repo link: the status note above. |
 | How to run it locally | [Running the app](#running-the-app) |
 | Architecture overview | [Architecture](#architecture), [The board](#the-board-two-feeds-one-view) |
 | How we get the data from each book, and why | [FanDuel](#getting-the-data-fanduel), [DraftKings](#getting-the-data-draftkings) |
@@ -57,7 +58,7 @@ normalizes both books into one model, and serves a live best-price board to the 
 | *Getting the data:* FanDuel's fastest path, what we tried, the poll interval and what it costs | [FanDuel](#getting-the-data-fanduel); [Key decisions](#key-decisions) 1 and 22 |
 | *Matching:* one clean model; which book sends full state and which sends changes; best price on different lines | [Normalization](#normalization-and-matching); DraftKings sends [deltas](#getting-the-data-draftkings), FanDuel [full state](#getting-the-data-fanduel); [Best price](#best-price) |
 | *Backend:* one ingestion per book, many viewers, a third book | [Architecture](#architecture), [Serving](#serving-the-board-server-sent-events) ("Many viewers"), [What we'd do next](#what-wed-do-next) |
-| "We will ask you to defend each choice" | [Key decisions](#key-decisions) (summary); [Decisions.txt](Decisions.txt) (full log, indexed by the brief's sections) |
+| "We will ask you to defend each choice" | [Key decisions](#key-decisions): what we chose, why, what we rejected |
 
 ---
 
@@ -88,7 +89,7 @@ which region its feed represents. We reached both books from an AWS Canada insta
 not blocked there ([FD-9](#fd-9-geography)); `npm run dev` from a home or VPS address may still be
 blocked, in which case use `npm run dev:remote` (live data through our server) or `BOOKS=fake`.
 
-> **Every decision and its reasoning, alternatives and evidence: [Decisions.txt](Decisions.txt).**
+> **Every decision, with its reasoning and alternatives: [Key decisions](#key-decisions).**
 
 ---
 
@@ -222,8 +223,7 @@ test/                   vitest suites and the live FD fixture
 
 ## Key decisions
 
-Each decision states what we chose, why, what we rejected, and where the evidence is. The full log, with
-trade-offs and what would change our mind, is [Decisions.txt](Decisions.txt).
+Each decision states what we chose, why, what we rejected, and where the evidence is.
 
 ### Getting data
 1. **FanDuel: PIR push and a 1 s SMP poll, raced.**
@@ -354,7 +354,7 @@ trade-offs and what would change our mind, is [Decisions.txt](Decisions.txt).
       Ontario lines would add nothing; and DK ignores the jurisdiction name, so "NJ" on the DK side is
       unverified ([DK-17](#dk-17-the-jurisdiction-name-is-ignored-so-we-cannot-choose-a-draftkings-region)).
     - *Rejected:* a separate Ontario column. Canadian IPs are not blocked, but the prices matched.
-    - → D-03 in [Decisions.txt](Decisions.txt); the Canada note in [Running the app](#running-the-app)
+    - → the Canada note in [Running the app](#running-the-app)
 22. **Modest, fixed request rates, the same on each box.**
     - FD: one SMP poll per second, one PIR socket, a board refresh (two requests) every 30 s. DK: one
       socket and one REST read per minute, plus two per reconnect (the bootstrap and a resync 2 s later).
@@ -364,8 +364,7 @@ trade-offs and what would change our mind, is [Decisions.txt](Decisions.txt).
     - *Rejected:* 0.5 s polling from one IP. It doubles one IP's footprint, and blocks follow IP
       reputation, so a second IP protects more than a faster poller.
     - No 429 or other rate-limit response at these rates, in development or in either box's service log.
-    - → D-16 and D-36 in [Decisions.txt](Decisions.txt);
-      [What we hit](#what-we-hit-geo-bot-protection-rate-limits-credentials)
+    - → [What we hit](#what-we-hit-geo-bot-protection-rate-limits-credentials)
 
 ---
 
@@ -839,6 +838,63 @@ unchanged `reason` text).
 - **Apply each frame immediately:** no batching in the connectors.
 - **Host next to FD's push origin** (`us-east-2`).
 
+**Final re-run (2026-10-19, 4–5 pm CT, before the game).** Every harness was re-run; the full tables and
+caveats are below.
+
+*What the FD poll interval costs* (`npx tsx scripts/poll-sweep.ts`: the recorded live session replayed with
+the polls thinned; delay is against the earliest any channel showed each of 773 price states):
+
+| Config | Mean delay | p90 | States missed |
+|---|---|---|---|
+| Push only | 112 ms | 362 ms | 10.5% |
+| Poll only, 1 s | 147 ms | 464 ms | 2.2% |
+| Poll only, 2 s | 582 ms | 1.3 s | 7.4% |
+| Poll only, 5 s (FD's own site) | 1.8 s | 4.0 s | 16.1% |
+| **Push + 1 s poll (shipped)** | reference | | 0% |
+| Push + 2 s poll | 50 ms | 235 ms | 0.7% |
+| Push + 5 s poll | 81 ms | 322 ms | 1.1% |
+
+Polling alone is the expensive option; push alone misses transient states the poll catches; together they
+close each other's gaps. The shipped row is the reference, so read the others as what they cost against
+it. It costs one ~3.4 KB gzipped request per second per box.
+
+Caveats:
+- The shipped config is the reference, so it reads 0 by construction. This is relative arrival, not
+  absolute book → screen latency.
+- One 3-minute session, 70 markets, 773 states: the p99 and max columns are indicative only.
+- 0.5 s polling can't be replayed (there are no polls between the 1 s ones), so the two-box interleave
+  at +0.5 s is not measured separately.
+- The replay assumes polls don't change what push delivers. True for the recording; a live A/B at
+  different intervals would confirm it.
+- FD's book timestamp is whole seconds, so this measures arrival order, not time since the book changed
+  the price.
+
+*Other harnesses, same day:*
+- **Merge replay** (`scripts/replay-merge.ts`): unchanged at 773 market states shown, 0 flips, 312 of 693
+  push states shown early (mean 249 ms); the board's `QuoteMerge` shows 1,544 quote states, 0 flips.
+- **Test suite:** 154 tests pass (20 files).
+- **FanDuel, pregame, live from this dev box (3 min, `npm run watch:fd`):** live with 15 games and 90
+  quotes. Pregame lines barely move, so only 4 push changes arrived (book → backend p50 830 ms, n = 4,
+  whole-second timestamps); not enough to quote a distribution. Process: 147 MB, ~5% of a core.
+- **Backend → browser, through the public URL** (`npm run measure -- --smoke`, from St. Louis): first
+  byte of the stream 30 ms; deltas emit → receive p50 10 ms (n = 3, clock ±15 ms); heartbeat gaps ≤ 5 s;
+  HTTP/2 negotiated. The n is tiny because pregame prices were quiet; the game run below is the real test.
+
+### Game-night measurements (WAS @ SF, 2026-10-19, kickoff 8:15 pm ET)
+
+> **Not yet filled in.** A collector starts at 8:00 pm ET and runs 3 hours. It writes `docs/latency/`:
+> `<date>-mnf.md` (book → client per book × phase × channel × first feed), `<date>-mnf.metrics.jsonl` (the
+> board's `/api/metrics` every 15 min, which carries DraftKings' engine → pipeline → gateway legs), and
+> `mnf-watch-fd.log` (a direct FanDuel connector with 5-minute summaries). Its vantage point is the St.
+> Louis dev server, not Canada, and that is stated with the numbers. Results go here once the run ends.
+
+| Measurement | Pregame (before 8:15 pm ET) | Live (in play) |
+|---|---|---|
+| DraftKings, book → backend (engine / pipeline / gateway legs) | _pending_ | _pending_ |
+| FanDuel, book → backend (push; poll; first copy) | _pending_ | _pending_ |
+| Backend → browser, per book | _pending_ | _pending_ |
+| Book → browser, per book | _pending_ | _pending_ |
+
 ---
 
 ## Hosting: region, instances and network
@@ -1033,7 +1089,7 @@ Each entry lists **symptom → diagnosis → resolution**, plus its current stat
   - Nothing in the response, headers or cookies names a jurisdiction. The legacy `/sites/US-NJ-SB/…`
     path is `403 Access Denied` for every site, including NJ.
 - **Resolution / status.** Unresolved. We get one DraftKings feed whatever we ask for, and cannot tell
-  which jurisdiction it represents, so "DK prices are NJ" is **not verified** (D-03 says it is).
+  which jurisdiction it represents, so "DK prices are NJ" is **not verified**.
   `scripts/probe-egress.mjs` reports "OK" for any state name because it checks status codes only, not
   that the data differs.
 
@@ -1207,7 +1263,7 @@ Each entry lists **symptom → diagnosis → resolution**, plus its current stat
 - **Diagnosis.** Each box reports an observation twice (the connector's `sample`, then its `change`). The
   first delivery was matched as a late copy, which moved B's position past it; the second then matched
   nothing and, with FanDuel's whole-second times tied, passed as new.
-- **Resolution.** A feed repeating the state it last reported is a duplicate (Decisions.txt D-35).
+- **Resolution.** A feed repeating the state it last reported is a duplicate.
   Merge test added; the live replay is unchanged; the drill shows 0 of 942. Deployed 2026-10-19.
 
 #### B-3: a restarting Box B looked like a mass removal
@@ -1226,7 +1282,7 @@ Each entry lists **symptom → diagnosis → resolution**, plus its current stat
   possible time with the shown state (6 DraftKings and 935 FanDuel rollbacks); ordering by in-effect time
   alone (0 rollbacks, but FanDuel changes from the same second waited for a heal: p90 4 s late); "this
   feed is in sync, accept its next change" (31–69 rollbacks); and position matching applied to polls (2).
-- **Resolution.** The shipped rules ([The board](#the-board-two-feeds-one-view), D-35): 0 rollbacks in
+- **Resolution.** The shipped rules ([The board](#the-board-two-feeds-one-view)): 0 rollbacks in
   simulation, 0 flips on the live replay.
 
 #### B-6: a space in the install path broke file paths
@@ -1252,7 +1308,7 @@ Each entry lists **symptom → diagnosis → resolution**, plus its current stat
 #### B-10: two fake feeds were two different books
 - **Finding.** Each synthetic-book process walked its own prices, so a second fake feed was another book
   lagging by its start time, and the board flip-flopped between them.
-- **Resolution.** Fake prices are a function of the wall clock (D-40); a test checks that a feed started
+- **Resolution.** Fake prices are a function of the wall clock; a test checks that a feed started
   later reports the same prices at the same book times.
 
 ---
@@ -1260,7 +1316,8 @@ Each entry lists **symptom → diagnosis → resolution**, plus its current stat
 ## What we'd do next
 
 **Next up**
-- **Measure live NFL latency** tonight (WAS @ SF, 8:15 pm ET), pregame and live:
+- **Fill in the game-night latency tables** from tonight's scheduled 3-hour collection (WAS @ SF, 8:15 pm
+  ET; see [Latency](#latency-measured-so-far)), pregame and live:
   - per book and channel, from the `sample` events;
   - DK's engine → pipeline → gateway → us breakdown;
   - end to end through the public URL (`scripts/measure-e2e.ts`).

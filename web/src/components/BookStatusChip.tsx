@@ -43,7 +43,7 @@ export function BookStatusChip({ meta, align = 'start' }: { meta: WireBookMeta; 
       <span
         data-book={meta.id}
         data-level={level}
-        className="inline-flex items-center gap-1.5 rounded-full bg-navy-800 px-2.5 py-1 text-xs whitespace-nowrap ring-1 ring-white/[0.06]"
+        className="inline-flex items-center gap-1.5 rounded-md border border-white/10 px-2 py-0.5 text-xs whitespace-nowrap"
       >
         <span aria-hidden="true" className={`size-2 rounded-full ${DOT[level]}`} />
         <span className="font-semibold text-ink">

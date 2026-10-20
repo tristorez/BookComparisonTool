@@ -33,7 +33,7 @@ export const GameRow = memo(function GameRow({ game, view, onOpen }: GameRowProp
   return (
     <article
       aria-label={`${game.awayName} at ${game.homeName}`}
-      className={`rounded-xl bg-navy-900 ring-1 ring-white/[0.06] ${onOpen ? 'cursor-pointer transition-shadow hover:ring-white/[0.16]' : ''}`}
+      className={`rounded-lg border border-white/[0.08] bg-navy-900 ${onOpen ? 'cursor-pointer transition-colors hover:border-white/20' : ''}`}
       data-game={game.key}
       onClick={onCardClick}
     >
@@ -60,7 +60,7 @@ export const GameRow = memo(function GameRow({ game, view, onOpen }: GameRowProp
               </span>
             </th>
             {MARKETS.map((m) => (
-              <th key={m} scope="col" className="px-0.5 pt-2.5 pb-1 text-center align-bottom text-[10px] font-semibold tracking-wider text-faint uppercase">
+              <th key={m} scope="col" className="px-0.5 pt-2.5 pb-1 text-center align-bottom text-[10px] font-medium tracking-wide text-faint uppercase">
                 {MARKET_LABEL[m]}
               </th>
             ))}
@@ -68,7 +68,7 @@ export const GameRow = memo(function GameRow({ game, view, onOpen }: GameRowProp
         </thead>
         <tbody>
           {ROWS.map((row) => (
-            <tr key={row} className={row === 1 ? 'border-t border-white/[0.05]' : undefined}>
+            <tr key={row} className={row === 1 ? 'border-t border-white/[0.06]' : undefined}>
               <th scope="row" className="px-2 py-2 text-left align-middle font-normal sm:px-3">
                 <TeamName code={row === 0 ? game.away : game.home} name={row === 0 ? game.awayName : game.homeName} />
               </th>
@@ -117,7 +117,7 @@ function CompareLink({ game, onOpen }: { game: WireGame; onOpen: (game: GameKey)
 export function TeamName({ code, name }: { code: string; name: string }) {
   return (
     <span className="flex min-w-0 flex-col sm:flex-row sm:items-baseline sm:gap-2">
-      <span className="text-sm font-bold text-ink">{code}</span>
+      <span className="text-sm font-semibold text-ink">{code}</span>
       <span className="truncate text-xs text-muted sm:text-sm">
         <span className="sm:hidden">{nickname(name)}</span>
         <span className="hidden sm:inline">{name}</span>
@@ -129,7 +129,7 @@ export function TeamName({ code, name }: { code: string; name: string }) {
 /** Shown instead of the kickoff time while any book has the game in play. */
 export function LiveBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold tracking-wider text-rose-300 uppercase ring-1 ring-rose-400/30">
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold tracking-wide text-rose-300 uppercase">
       <span aria-hidden="true" className="size-1.5 animate-pulse rounded-full bg-rose-400" />
       Live
     </span>
@@ -143,7 +143,7 @@ export function SuspectBadge() {
       align="start"
       tip="The books disagree sharply on this game, which usually means a mapping error. Its prices are shown but not used for Best Price."
     >
-      <span className="rounded-sm bg-amber-300/10 px-1 text-[10px] leading-4 font-medium text-amber-200 ring-1 ring-amber-300/25">check</span>
+      <span className="rounded-sm border border-amber-300/30 px-1 text-[10px] leading-4 font-medium text-amber-200">check</span>
     </Tip>
   );
 }

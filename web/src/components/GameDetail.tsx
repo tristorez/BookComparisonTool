@@ -14,7 +14,7 @@ import { Tip, type TipAlign } from './Tip';
 const HOLD_TIP =
   "The book's margin on this market: the implied probabilities of its two prices add up to 100% plus the hold. Lower is better for bettors.";
 
-const BADGE = 'rounded-sm bg-sky-400/10 px-1 text-[10px] leading-4 font-medium text-sky-200 ring-1 ring-sky-300/25';
+const BADGE = 'rounded-sm border border-white/15 px-1 text-[10px] leading-4 font-medium text-muted';
 
 /**
  * One game with every book compared: a table per market with a row per sportsbook (from the server's
@@ -30,7 +30,7 @@ export function GameDetail({ gameKey, onBack }: { gameKey: GameKey; onBack: () =
     <div className="flex flex-col gap-4" data-detail={gameKey}>
       <BackLink onBack={onBack} />
       {game === undefined ? (
-        <p aria-busy={!loaded} className="rounded-xl bg-navy-900 px-4 py-12 text-center text-sm text-muted ring-1 ring-white/[0.06]">
+        <p aria-busy={!loaded} className="rounded-lg border border-white/[0.08] bg-navy-900 px-4 py-12 text-center text-sm text-muted">
           {loaded ? 'This game is no longer on the board.' : 'Connecting to live odds…'}
         </p>
       ) : (
@@ -88,7 +88,7 @@ function GameHeading({ game, books }: { game: WireGame; books: readonly WireBook
         )}
         {game.suspect === true && <SuspectBadge />}
       </div>
-      <h2 className="text-lg leading-snug font-bold tracking-tight text-ink sm:text-xl">
+      <h2 className="text-lg leading-snug font-semibold text-ink sm:text-xl">
         {game.awayName} <span className="font-normal text-faint">at</span> {game.homeName}
       </h2>
       <p className="text-xs text-faint">
@@ -109,8 +109,8 @@ function MarketTable({ game, market, books }: { game: WireGame; market: MarketTy
   // The right-hand column's tooltips open leftwards so they stay on a phone's screen.
   const align = (side: Side): TipAlign => (side === sides[0] ? 'center' : 'end');
   return (
-    <section aria-labelledby={headingId} className="rounded-xl bg-navy-900 ring-1 ring-white/[0.06]" data-market={market}>
-      <h3 id={headingId} className="px-3 pt-3 text-[11px] font-semibold tracking-wider text-faint uppercase sm:px-4">
+    <section aria-labelledby={headingId} className="rounded-lg border border-white/[0.08] bg-navy-900" data-market={market}>
+      <h3 id={headingId} className="px-3 pt-3 text-[11px] font-semibold tracking-wide text-faint uppercase sm:px-4">
         {MARKET_LABEL[market]}
       </h3>
       <table className="w-full table-fixed border-collapse">

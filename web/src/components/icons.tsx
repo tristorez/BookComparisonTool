@@ -37,7 +37,7 @@ export function ChevronLeftIcon({ className = '' }: IconProps) {
 export function LogoMark({ className = '' }: IconProps) {
   return (
     <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false" className={className}>
-      <rect width="32" height="32" rx="8" className="fill-navy-800" />
+      <rect width="32" height="32" rx="6" className="fill-navy-800" />
       <path d="M8 21l5.5-5.5 4 4L24 12" fill="none" className="stroke-accent" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );

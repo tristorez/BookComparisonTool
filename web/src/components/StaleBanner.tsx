@@ -36,7 +36,7 @@ export function StaleBanner() {
   }
   if (notices.length === 0) return null;
   return (
-    <div role="status" className="border-b border-amber-400/20 bg-amber-400/[0.08]" data-stale-banner>
+    <div role="status" className="border-b border-amber-400/20 bg-amber-400/[0.06]" data-stale-banner>
       <div className="mx-auto flex max-w-5xl flex-col gap-1 px-4 py-2 sm:px-6">
         {notices.map((n) => (
           <p key={n.key} className="flex items-start gap-2 text-sm text-amber-100">

@@ -160,7 +160,7 @@ function MethodBadge({ label, align }: { label: MethodLabel; align: TipAlign }) 
         </>
       }
     >
-      <span data-method={label.text} className="rounded-sm bg-sky-400/10 px-1 text-[10px] leading-4 font-medium text-sky-200 ring-1 ring-sky-300/25">
+      <span data-method={label.text} className="rounded-sm border border-white/15 px-1 text-[10px] leading-4 font-medium text-muted">
         {label.text}
       </span>
     </Tip>
@@ -301,7 +301,7 @@ function IneligibleQuote({ inel, align, compact = false, children }: { inel: Ine
       >
         {inel.tags.includes('suspended') && <LockIcon className="size-3 shrink-0 text-muted" />}
         {children}
-        <span data-tag className="rounded-sm bg-amber-300/10 px-1 text-[10px] leading-4 font-medium whitespace-nowrap text-amber-200 ring-1 ring-amber-300/25">
+        <span data-tag className="rounded-sm border border-amber-300/30 px-1 text-[10px] leading-4 font-medium whitespace-nowrap text-amber-200">
           {inel.tags[0]}
         </span>
       </span>

@@ -36,7 +36,7 @@ export function ViewToggle({ books, view, onChange }: ViewToggleProps) {
       role="tablist"
       aria-label="Board view"
       onKeyDown={onKeyDown}
-      className="flex max-w-full self-start overflow-x-auto rounded-xl bg-navy-800 p-1 ring-1 ring-white/[0.06]"
+      className="flex max-w-full self-start overflow-x-auto rounded-lg border border-white/10 p-0.5"
     >
       {options.map((o, i) => {
         const active = o.id === view;
@@ -54,8 +54,8 @@ export function ViewToggle({ books, view, onChange }: ViewToggleProps) {
             aria-controls="board"
             tabIndex={i === selected ? 0 : -1}
             onClick={() => onChange(o.id)}
-            className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:outline-none ${
-              active ? 'bg-accent text-navy-950 shadow-sm' : 'text-muted hover:bg-white/5 hover:text-ink'
+            className={`shrink-0 rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:outline-none ${
+              active ? 'bg-navy-700 text-ink' : 'text-muted hover:bg-white/5 hover:text-ink'
             }`}
           >
             {o.label}

@@ -15,7 +15,7 @@ export function Board({ view, onOpenGame }: { view: View; onOpenGame?: (game: Ga
       ) : (
         groups.map((g) => (
           <section key={g.id} aria-labelledby={`group-${g.id}`} className="flex flex-col gap-2">
-            <h2 id={`group-${g.id}`} className="flex items-center gap-2 px-1 text-xs font-semibold tracking-wider text-muted uppercase">
+            <h2 id={`group-${g.id}`} className="flex items-center gap-2 px-1 text-xs font-semibold tracking-wide text-muted uppercase">
               {g.live && <span aria-hidden="true" className="size-1.5 animate-pulse rounded-full bg-rose-400" />}
               {g.label}
               <span className="font-normal tracking-normal text-faint normal-case">
@@ -35,7 +35,7 @@ export function Board({ view, onOpenGame }: { view: View; onOpenGame?: (game: Ga
 function EmptyBoard({ loaded, reconnecting }: { loaded: boolean; reconnecting: boolean }) {
   if (loaded) {
     return (
-      <p className="rounded-xl bg-navy-900 px-4 py-12 text-center text-sm text-muted ring-1 ring-white/[0.06]">
+      <p className="rounded-lg border border-white/[0.08] bg-navy-900 px-4 py-12 text-center text-sm text-muted">
         No NFL games on the board right now. New games appear here as soon as the books list them.
       </p>
     );
@@ -44,7 +44,7 @@ function EmptyBoard({ loaded, reconnecting }: { loaded: boolean; reconnecting: b
     <div className="flex flex-col gap-2" aria-busy="true">
       <p className="px-1 text-sm text-muted">{reconnecting ? 'Reconnecting to the odds server…' : 'Connecting to live odds…'}</p>
       {[0, 1, 2].map((i) => (
-        <div key={i} aria-hidden="true" className="h-[7.5rem] animate-pulse rounded-xl bg-navy-900 ring-1 ring-white/[0.06]" />
+        <div key={i} aria-hidden="true" className="h-[7.5rem] animate-pulse rounded-lg border border-white/[0.08] bg-navy-900" />
       ))}
     </div>
   );

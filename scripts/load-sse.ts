@@ -22,6 +22,8 @@ const seconds = Number(args.get('seconds') ?? 60);
 const sampleEvery = Math.max(1, Math.floor(clients / 50)); // parse deltas on ~50 clients
 
 const pct = (xs: number[], p: number) => [...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(p * xs.length))] ?? NaN;
+/** No spread: a long run collects more samples than `Math.max(...xs)` can take as arguments (RangeError). */
+const max = (xs: number[]) => xs.reduce((m, x) => Math.max(m, x), -Infinity);
 
 // Clock offset from the best of 7 warm round trips (the first one pays for the TLS handshake).
 let offset = 0;
@@ -86,7 +88,7 @@ console.log(
       receivedMB: +(bytes / 1e6).toFixed(1),
       perClientKBps: +(bytes / 1e3 / clients / seconds).toFixed(2),
       sampledDeltas: deltas,
-      emitToReceiveMs: { p50: pct(lags, 0.5), p90: pct(lags, 0.9), p99: pct(lags, 0.99), max: Math.max(...lags) },
+      emitToReceiveMs: { p50: pct(lags, 0.5), p90: pct(lags, 0.9), p99: pct(lags, 0.99), max: max(lags) },
       clockErrorMs: bestRtt / 2,
       server: health.sse,
     },

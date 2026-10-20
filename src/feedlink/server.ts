@@ -81,9 +81,15 @@ export class FeedLinkServer {
     sock.setKeepAlive(true, 10_000);
     const splitter = new LineSplitter();
     let feed: string | null = null;
+    /** Set once this connection is refused: whatever else it sends before the socket closes is ignored. */
+    let refused = false;
+    const refuse = (why: string) => {
+      refused = true;
+      this.reject(sock, why);
+    };
     let lastHeard = Date.now();
     const send = (m: ToFeed) => sock.writable && sock.write(encode(m));
-    const helloTimer = setTimeout(() => this.reject(sock, 'no hello within 5s'), 5_000);
+    const helloTimer = setTimeout(() => refuse('no hello within 5s'), 5_000);
     const pingTimer = setInterval(() => {
       if (Date.now() - lastHeard > (this.opts.silenceMs ?? 5_000)) {
         this.opts.log(`feed link ${feed ?? '?'} silent, dropping`);
@@ -94,12 +100,13 @@ export class FeedLinkServer {
     }, this.opts.pingMs ?? 2_000);
 
     sock.on('data', (chunk) => {
+      if (refused) return;
       lastHeard = Date.now();
       let lines: string[];
       try {
         lines = splitter.push(chunk);
       } catch (err) {
-        this.reject(sock, String(err));
+        refuse(String(err));
         return;
       }
       for (const line of lines) {
@@ -110,11 +117,16 @@ export class FeedLinkServer {
         }
         this.counters.messages++;
         if (!feed) {
-          if (m.t !== 'hello') return this.reject(sock, 'first message must be hello');
+          if (m.t !== 'hello') return refuse('first message must be hello');
           feed = this.accept(sock, m, send);
-          if (feed) clearTimeout(helloTimer);
+          if (!feed) {
+            refused = true; // accept() has already sent the reason and scheduled the close
+            return;
+          }
+          clearTimeout(helloTimer);
           continue;
         }
+        // A repeated hello on an accepted link carries nothing new.
         if (m.t !== 'hello') this.onMessage(feed, m);
       }
     });

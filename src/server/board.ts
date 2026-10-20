@@ -23,16 +23,24 @@ import type { LatencyTracker } from './latency.js';
 import type { BookSpec } from './registry.js';
 
 const CHANNELS: readonly Channel[] = ['push', 'poll', 'snapshot'];
+/** Best state first: a book's status is its best feed's (healthy feeds before unhealthy ones). */
 const STATE_RANK: Record<ConnectionState, number> = { live: 0, degraded: 1, connecting: 2, down: 3, stopped: 4 };
 const TEAM_NAMES = new Map(NFL_TEAMS.map((t) => [t.code, t.name]));
 
+// Frozen-feed watchdog: a feed is frozen when it reports no live price change for FROZEN_WINDOW_MS while
+// another healthy feed of the same book reports at least FROZEN_OTHER_MIN_CHANGES. Checked every
+// WATCHDOG_EVERY_MS; a frozen feed is restarted at most once per RESTART_COOLDOWN_MS.
 const WATCHDOG_EVERY_MS = 10_000;
 const FROZEN_WINDOW_MS = 90_000;
 const FROZEN_OTHER_MIN_CHANGES = 5;
 const RESTART_COOLDOWN_MS = 5 * 60_000;
+// A healthy feed removing at least MASS_REMOVAL_MIN quotes and more than MASS_REMOVAL_SHARE of what it
+// lists in one change is held for MASS_REMOVAL_HOLD_MS; quotes it re-reports meanwhile are kept.
 const MASS_REMOVAL_MIN = 12;
 const MASS_REMOVAL_SHARE = 0.3;
 const MASS_REMOVAL_HOLD_MS = 15_000;
+// Cross-book sanity check (pregame): two books whose no-vig probabilities for the same side differ by more
+// than SANITY_MAX_GAP at lines within SANITY_MAX_LINE_DIFF points flag the game as suspect.
 const SANITY_MAX_GAP = 0.2;
 const SANITY_MAX_LINE_DIFF = 1.5;
 
@@ -66,58 +74,81 @@ export interface FeedHandle {
   setLinked(up: boolean): void;
 }
 
+/** One feed: one box's connector for one book. A feed is healthy when it is linked, not stale and not frozen. */
 interface FeedState {
   box: string;
   book: BookId;
   source: FeedSource;
+  /** Latest connector status (re-read every tick, since its `lastDataAt` moves without an event). */
   status: BookStatus;
+  /** False while a remote feed's link is down; local feeds are always linked. */
   linked: boolean;
+  /** Has been healthy at least once: only such a feed gets the stale grace period. */
   everHealthy: boolean;
+  /** When the feed last started looking unhealthy (null while it looks fine). */
   staleSince: number | null;
+  /** Unhealthy past the grace period (or at once, for a feed that never was healthy). */
   stale: boolean;
+  /** Excluded by the frozen-feed watchdog until it reports a live change again. */
   frozen: boolean;
   attachedAt: number;
   lastRestartAt: number;
+  /** This feed's view of each game it lists, by game key. */
   games: Map<string, BookGame>;
   /** Quote keys this feed currently lists. */
   keys: Set<string>;
   /** When this feed reported a live quote (any outcome), for the frozen-feed watchdog. */
   liveActivity: number[];
+  /** A mass removal on hold: applied after MASS_REMOVAL_HOLD_MS except for the keys re-reported meanwhile. */
   held: { refs: QuoteRef[]; at: number; relisted: Set<string> } | null;
 }
 
+/** Served in /api/health and /api/metrics. */
 interface Counters {
+  /** Exceptions caught inside the board's handlers (each is logged with its stack). */
   aggregatorErrors: number;
+  /** Quotes dropped at the door: not a usable American price, or a spread/total without a finite line. */
   invalidQuotes: number;
+  /** Reports older than the state already shown (QuoteMerge `rejected: older`). */
   olderRejected: number;
+  /** Coarse-timestamp (FD) push reports matched to an earlier shown occurrence (QuoteMerge `late-copy`). */
   lateCopies: number;
+  /** Shown values replaced by the sweep because every healthy feed agreed on another state. */
   heals: number;
+  /** Shown values replaced by another feed's different view: the feed behind them went unhealthy or stopped listing the quote. */
   failovers: number;
   massRemovalsHeld: number;
   watchdogFreezes: number;
   watchdogRestarts: number;
+  /** A feed re-listing a game key under a different book event id. */
   rebinds: number;
 }
 
 export class Board extends EventEmitter<{ delta: [Delta] }> {
+  /** This process's id: SSE ids are `<boot>.<seq>`, so a client from before a restart resyncs. */
   readonly boot = randomUUID().slice(0, 8);
   private seqNo = 0;
+  /** The most recent deltas, oldest first, for SSE resume (`since`). */
   private readonly ring: Delta[] = [];
   private readonly now: () => number;
   private readonly defer: (fn: () => void) => void;
   private readonly log: (msg: string) => void;
   private readonly books: BookSpec[];
 
+  /** By `<box>/<book>`. */
   private readonly feeds = new Map<string, FeedState>();
+  /** One QuoteMerge per quote, by `quoteKey()`: the value shown for that book's quote. */
   private readonly merges = new Map<string, QuoteMerge>();
   /** What clients have: the state as of `seq`, used for snapshots. */
   private readonly gamesSent = new Map<string, WireGame>();
   private readonly quotesSent = new Map<string, WireQuote>();
   private readonly bestsSent = new Map<string, WireBest>();
   private readonly statusSent = new Map<BookId, WireBookStatus>();
+  /** Games failing the cross-book sanity check (shown, but excluded from Best Price). */
   private readonly suspect = new Set<string>();
   private readonly lastChangeAt = new Map<BookId, number>();
 
+  /** Everything changed since the last flush; one flush turns it into one delta. */
   private readonly pending = {
     quotes: new Map<string, WireQuote>(),
     removedQuotes: new Set<string>(),
@@ -330,6 +361,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     this.schedule();
   }
 
+  /** One channel of one feed observed a value for a quote: validate it, then let the quote's merge judge it. */
   private report(f: FeedState, game: string, market: MarketType, side: Side, v: { american: number; line: number | null; suspended: boolean; live: boolean; bookTime: number | null; receivedAt: number }, channel: Channel, now: number): void {
     if (!isValidAmerican(v.american) || (market !== 'moneyline' && (v.line === null || !Number.isFinite(v.line)))) {
       this.counters.invalidQuotes++;
@@ -348,6 +380,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     this.handle(f.book, key, res, now);
   }
 
+  /** A feed stopped listing a quote: every channel of that box drops out of the quote's merge. */
   private removeQuote(f: FeedState, ref: QuoteRef, now: number): void {
     const key = quoteKey(f.book, ref.gameKey, ref.market, ref.side);
     f.keys.delete(key);
@@ -357,6 +390,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     for (const ch of CHANNELS) this.handle(f.book, key, merge.remove(`${f.box}:${ch}`, health, now), now);
   }
 
+  /** After the hold, apply a held mass removal, minus the quotes the feed re-reported in the meantime. */
   private releaseHeld(f: FeedState, now: number): void {
     if (!f.held || now - f.held.at < MASS_REMOVAL_HOLD_MS) return;
     const { refs, relisted } = f.held;
@@ -370,6 +404,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     this.log(`feed ${f.box}/${f.book}: released held removal, applied ${applied}/${refs.length}`);
   }
 
+  /** Run every merge of one book through its sweep (failover, heal, drop) against the feeds' current health. */
   private sweepBook(book: BookId, now: number): void {
     const health = this.mergeHealth(book);
     const anyHealthy = this.anyHealthy(book);
@@ -377,6 +412,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     for (const [key, merge] of this.merges) if (key.startsWith(prefix)) this.handle(book, key, merge.sweep(health, now, anyHealthy), now);
   }
 
+  /** Turn a merge's verdict into pending output (quote, game and best-price recompute) and metrics. */
   private handle(book: BookId, key: string, res: MergeResult, now: number): void {
     const [, game, market] = key.split('|') as [BookId, string, MarketType, Side];
     switch (res.kind) {
@@ -419,6 +455,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     }
   }
 
+  /** The browser's shape of a merged value; `allowPrev` is false for heals and failovers. */
   private toWire(key: string, v: MergedValue, allowPrev: boolean): WireQuote {
     const [book, game, market, side] = key.split('|') as [BookId, string, MarketType, Side];
     // A heal or failover is not a market move: suppress a fresh `prev` so the UI does not flash.
@@ -440,6 +477,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     };
   }
 
+  /** Queue a best-price recompute for one market; a price move outranks an eligibility change (it may flash). */
   private markMarket(game: string, market: MarketType, why: 'price' | 'eligibility'): void {
     const key = `${game}|${market}`;
     if (this.pending.markets.get(key) !== 'price') this.pending.markets.set(key, why);
@@ -449,6 +487,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     for (const m of MARKETS) this.markMarket(game, m, why);
   }
 
+  /** Every game this book has quotes for needs its best prices recomputed (e.g. the book went stale). */
   private markBook(book: BookId, why: 'price' | 'eligibility'): void {
     this.pending.status.add(book);
     const games = new Set<string>();
@@ -608,6 +647,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     return { ...views[0]!, live: views.some((g) => g.live) };
   }
 
+  /** The game as clients see it, combined across books (earliest kickoff, live if any book says so); null once no book lists it. */
   private wireGame(gk: string): WireGame | null {
     const views = this.books.map((b) => this.bookGame(b.id, gk)).filter((g): g is BookGame => !!g);
     if (!views.length) return null;
@@ -625,10 +665,12 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     };
   }
 
+  /** Best Price eligibility: not suspended, book not stale, a valid price, not a pre-game line on a live game, game not suspect. */
   private eligible(book: BookId, v: MergedValue, game: WireGame, ignoreSuspect = false): boolean {
     return !v.suspended && this.anyHealthy(book) && isValidAmerican(v.american) && !(game.live && !v.live) && (ignoreSuspect || !game.suspect);
   }
 
+  /** Every eligible offer for one game, in bestPrice.ts's shape. */
   private offers(gk: string, game: WireGame, ignoreSuspect = false): GameOffers {
     const offers: GameOffers = { live: game.live, books: {} };
     for (const spec of this.books) {
@@ -644,6 +686,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     return offers;
   }
 
+  /** Best price for both sides of one market, or `none` for a side no eligible book offers. */
   private computeBests(gk: string, market: MarketType, why: 'price' | 'eligibility'): WireBest[] {
     const game = this.gamesSent.get(gk)!;
     const offers = this.offers(gk, game);
@@ -680,6 +723,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     return false;
   }
 
+  /** A book's status as clients see it: its best feed's state, stale only when every feed is unhealthy. */
   bookStatus(book: BookId): WireBookStatus {
     const fs = this.feedsOf(book).sort((a, b) => Number(this.healthy(b)) - Number(this.healthy(a)) || STATE_RANK[a.status.state] - STATE_RANK[b.status.state]);
     const best = fs[0];
@@ -697,6 +741,7 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     };
   }
 
+  /** Why a feed is in its state, in words for the status chip's tooltip. */
   private feedDetail(f: FeedState): string {
     if (!f.linked) return 'feed link down';
     if (f.frozen) return 'suspected frozen: no price changes while the other feed moves';

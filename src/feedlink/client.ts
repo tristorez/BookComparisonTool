@@ -75,6 +75,9 @@ export class FeedLinkClient {
     this.running = false;
     if (this.statusTimer) clearInterval(this.statusTimer);
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    // Not linked from here on: the socket's own close event comes a tick later, and a start() in
+    // between must not write to the next socket before its hello and welcome.
+    this.ready = false;
     this.sock?.destroy();
   }
 
@@ -111,7 +114,10 @@ export class FeedLinkClient {
               this.pendingSnapshot.add(book);
               if (isReady(c.status.state)) this.sendSnapshot(book);
             }
+            // The 15 s fallback belongs to this connection: after a reconnect, the new welcome arms its
+            // own, so this one must not cut the next connection's wait short.
             setTimeout(() => {
+              if (this.sock !== sock) return;
               for (const book of [...this.pendingSnapshot]) this.sendSnapshot(book);
             }, 15_000).unref();
             break;

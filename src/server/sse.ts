@@ -27,6 +27,7 @@ interface Client {
 
 export class SseHub {
   private readonly clients = new Set<Client>();
+  /** Serialized delta frames by seq, shared by the live broadcast and by resumes (oldest evicted first). */
   private readonly frames = new Map<number, string>();
   private readonly timer: NodeJS.Timeout;
   readonly counters = { connects: 0, resumes: 0, snapshots: 0, drops: 0, deltas: 0, bytes: 0, lastDeltaBytes: 0, lastSnapshotBytes: 0, maxDeltaBytes: 0 };

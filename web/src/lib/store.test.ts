@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { WireGame } from '@shared/wire';
-import { GAME, delta, game, manualStore, none, pick, quote, snapshot, status } from '../test/fixtures';
+import { BOOKS, GAME, delta, game, manualStore, none, pick, quote, snapshot, status } from '../test/fixtures';
 import { cellKey, quoteKey } from './shared';
 import { OddsStore, TOPICS } from './store';
 
@@ -49,6 +49,17 @@ describe('OddsStore notifications', () => {
 
     store.applyDelta(delta(12, { bests: [pick({ american: -105 })] }));
     expect(store.getCellByKey(CELL)).not.toBe(cell);
+  });
+
+  it('keeps the book registry across identical snapshots, and replaces it when a region changes', () => {
+    const store = manualStore();
+    store.applySnapshot(snapshot({ books: BOOKS.map((b) => ({ ...b, region: 'NJ' })) }));
+    const books = store.getBooks();
+    store.applySnapshot(snapshot({ books: BOOKS.map((b) => ({ ...b, region: 'NJ' })) }));
+    expect(store.getBooks()).toBe(books);
+    // A board restarted for another jurisdiction: the footer's "NJ lines" note must follow.
+    store.applySnapshot(snapshot({ books: BOOKS.map((b) => ({ ...b, region: 'PA' })) }));
+    expect(store.getBooks().map((b) => b.region)).toEqual(['PA', 'PA']);
   });
 
   it('runs afterFlush callbacks after listeners, in the same frame', () => {

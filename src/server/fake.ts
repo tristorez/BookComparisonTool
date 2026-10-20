@@ -85,7 +85,9 @@ export class FakeConnector extends BookConnector {
   private readonly markets = new Map<string, FakeMarket>(); // gameKey|market
   private running = false;
   private startedAt = 0;
+  /** The last wall-clock tick applied (tick k covers [k·tickMs, (k+1)·tickMs)). */
   private lastTick = 0;
+  /** `massRemove` mode: the quotes already pulled (they are pulled once, then nothing moves). */
   private removed: QuoteRef[] = [];
 
   constructor(book: BookId, opts: FakeOptions = {}) {

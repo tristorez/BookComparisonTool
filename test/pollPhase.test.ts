@@ -54,6 +54,31 @@ describe('FanDuel poll phase', () => {
     expect(new Set(gaps)).toEqual(new Set([500]));
   });
 
+  it('keeps one poll loop when the connector is restarted while a poll is in flight', async () => {
+    vi.useFakeTimers({ now: START });
+    const c = new FanDuelConnector({ push: false, pollIntervalMs: 1_000 });
+    const fd = c as unknown as PollInternals & { runDiscovery(): Promise<void> };
+    fd.runDiscovery = async () => {}; // no board reads: only the poll loop runs
+    const at: number[] = [];
+    let release: (() => void) | undefined;
+    fd.fetchPrices = async () => {
+      at.push(Date.now());
+      if (at.length === 2 && release === undefined) await new Promise<void>((r) => (release = r)); // the second poll hangs
+    };
+    await c.start();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(release).toBeDefined();
+    // The watchdog's restart (and the chaos routes) stop and start the same instance.
+    await c.stop();
+    await c.start();
+    release!(); // the first run's poll completes after the second run has started its own loop
+    at.length = 0;
+    await vi.advanceTimersByTimeAsync(5_000);
+    await c.stop();
+    expect(at.length).toBeGreaterThanOrEqual(4);
+    expect(new Set(at).size).toBe(at.length); // two loops would poll twice per slot
+  });
+
   it('does not drift after a stalled process or a slow request: it skips to the next slot', async () => {
     const at = await polls(0, 9_000, async (i) => {
       if (i === 2) vi.setSystemTime(Date.now() + 1_730); // the event loop was blocked; the clock moved on

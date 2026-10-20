@@ -281,7 +281,12 @@ async function fanduel() {
     let startAck = false;
     let frames = 0;
     conn.onText((text) => {
-      const msg = JSON.parse(text);
+      let msg;
+      try {
+        msg = JSON.parse(text);
+      } catch {
+        return; // a non-JSON frame would otherwise throw out of the socket handler and kill the probe
+      }
       if (msg.type === 'connection_ack') {
         ackMs = Date.now() - started;
         conn.send(

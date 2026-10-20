@@ -236,45 +236,66 @@ export class DraftKingsConnector extends BookConnector {
   private readonly leagueId: string;
   private readonly subcategoryId: string;
 
+  // DK's own entities, by id, as the latest snapshot and frames left them (`change` frames are merged in).
   private readonly events = new Map<string, Tracked<DkEvent>>();
   private readonly markets = new Map<string, Tracked<DkMarket>>();
   private readonly selections = new Map<string, Tracked<DkSelection>>();
+  // Parent → child indexes: event id → market ids, market id → selection ids.
   private readonly marketsByEvent = new Map<string, Set<string>>();
   private readonly selectionsByMarket = new Map<string, Set<string>>();
   /** Games we have emitted, by DK event id. */
   private readonly emittedGames = new Map<string, BookGame>();
+  /** `change` patches for selections not seen yet, by selection id, applied when the `add` arrives (ORPHAN_TTL_MS). */
   private readonly orphans = new Map<string, { patch: DkSelection; rx: number; t: number | null }>();
   /** Recently removed ids → removal time, so a stale snapshot cannot resurrect them during a reconcile. */
   private readonly tombstones = new Map<string, number>();
+  /** Quotes whose selection vanished, by quote key: removed only if no replacement arrives within REPLACEMENT_GRACE_MS. */
   private readonly pendingRemovals = new Map<string, { ref: QuoteRef; marketId: string; at: number }>();
+  // Log-once sets for event statuses we don't know and events whose teams we can't map.
   private readonly unknownStatuses = new Set<string>();
   private readonly unresolvedEvents = new Set<string>();
+  /** Insertion counter behind `Tracked.seq`. */
   private seq = 0;
 
   private readonly timers = new Set<NodeJS.Timeout>();
   private running = false;
+  /**
+   * Incremented by every `start()`. A periodic task in flight across a stop/start (the board's
+   * frozen-feed restart, the chaos routes) sees a newer run and stops re-arming, so the restart can't
+   * leave a second reconcile loop behind.
+   */
+  private runId = 0;
   private ws: WebSocket | null = null;
   /** Incremented per connection; async work started under an older epoch is discarded. */
   private epoch = 0;
+  /** Consecutive failed connections, for the reconnect backoff; reset once a connection proves stable. */
   private wsAttempt = 0;
+  /** Last frame or pong on the current socket, for the silence watchdog. */
   private wsLastSeenAt = 0;
   /** Frames apply directly once ready; before that they are buffered for replay over the snapshot. */
   private ready = false;
+  /** When the last connection stopped being ready: a reconnect within MAX_DEGRADED_GAP_MS may go live on the old board. */
   private lastReadyAt = 0;
+  /** Last `update` frame (not pong): a live game with none for LIVE_SUBSCRIPTION_SILENCE_MS means a dead subscription. */
   private lastUpdateFrameAt = 0;
   private lastResubscribeAt = 0;
   /** Bootstrap timing for the current connection, for the startup log. */
   private connectStartedAt = 0;
   private ackAt = 0;
   private snapshotAt = 0;
+  // A reconcile never overlaps a bootstrap or another reconcile.
   private bootstrapping = false;
   private reconciling = false;
+  /** Request time of the newest snapshot applied, so a slower, older read can't overwrite a newer one. */
   private lastSnapshotSentAt = 0;
   /** When a snapshot first asked to drop most of the board; cleared as soon as one doesn't. */
   private massDropSince: number | null = null;
+  /** Frames received before the snapshot is applied (at most BUFFER_HORIZON_MS of them). */
   private buffered: { frame: DkFrame; rx: number }[] = [];
+  /** The live subscription: its JSON-RPC id (matched against `unsubscribed`) and query. */
   private subscription: { id: string; partial: DkSubscriptionPartial } | null = null;
   private subscribedAt = 0;
+  /** Consecutive failed REST reads (bootstrap or reconcile); two in a row while live → degraded. */
   private restFailures = 0;
 
   private tokenMode: 'default' | 'anonymous-jwt';
@@ -282,8 +303,10 @@ export class DraftKingsConnector extends BookConnector {
   private jwt = DEFAULT_TOKEN;
   /** When the current JWT is due for renewal (0 until one is fetched). */
   private jwtRenewAt = 0;
+  /** The renewal in flight, shared by concurrent callers. */
   private jwtFetch: Promise<void> | null = null;
   private jwtTimer: NodeJS.Timeout | undefined;
+  /** Subscription refusals since the last successful bootstrap. */
   private tokenRejections = 0;
 
   constructor(opts: DraftKingsOptions = {}) {
@@ -307,6 +330,7 @@ export class DraftKingsConnector extends BookConnector {
   async start(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    this.runId++;
     this.setStatus('connecting');
     if (this.tokenMode === 'anonymous-jwt') await this.renewJwt();
     this.connect();
@@ -582,6 +606,9 @@ export class DraftKingsConnector extends BookConnector {
           const replayed = this.goLive();
           this.restFailures = 0;
           this.tokenRejections = 0;
+          // One reconnect that came back live clears the backoff (most drops are one-offs). After several
+          // failures in a row the count stays until the connection has been up STABLE_CONNECTION_MS (see the
+          // close handler), so a socket that keeps flapping keeps backing off.
           this.wsAttempt = this.wsAttempt > 1 ? this.wsAttempt : 0;
           const since = (t: number) => (t ? `${t - this.connectStartedAt} ms` : 'n/a');
           this.log(
@@ -777,6 +804,10 @@ export class DraftKingsConnector extends BookConnector {
     this.flush(batch, 'push', rx, times);
   }
 
+  // put*/drop* update entity state and the indexes, and record in `batch` which markets and events need
+  // their quotes or game recomputed. `rx` is the frame's receive time (0 for REST); drops given an `rx`
+  // also leave a tombstone.
+
   private putEvent(e: DkEvent, rx: number, batch: Batch): void {
     this.events.set(e.id, { v: e, rx, seq: this.events.get(e.id)?.seq ?? ++this.seq });
     batch.events.add(e.id);
@@ -905,6 +936,7 @@ export class DraftKingsConnector extends BookConnector {
     return bySide;
   }
 
+  /** A DK event as a cross-book game, or null if it is finished or its teams can't be mapped. */
   private toGame(ev: DkEvent): BookGame | null {
     if (ev.status && !KNOWN_EVENT_STATUSES.has(ev.status) && !this.unknownStatuses.has(ev.status)) {
       this.unknownStatuses.add(ev.status);
@@ -934,6 +966,7 @@ export class DraftKingsConnector extends BookConnector {
     };
   }
 
+  /** The quote slots a DK market fills (none if it isn't a main line or its game was never emitted). */
   private refsForMarket(m: DkMarket): QuoteRef[] {
     const type = marketTypeOf(m);
     const game = m.eventId ? this.emittedGames.get(m.eventId) : undefined;
@@ -952,6 +985,7 @@ export class DraftKingsConnector extends BookConnector {
     this.subscribe(ws, this.subscription.partial);
   }
 
+  /** Every 250 ms: resubscribe a silent live subscription, finish line-move removals, expire orphans and tombstones. */
   private housekeeping(): void {
     const now = Date.now();
     if (this.ready && now - this.lastUpdateFrameAt > LIVE_SUBSCRIPTION_SILENCE_MS && [...this.emittedGames.values()].some((g) => g.live)) {
@@ -968,6 +1002,7 @@ export class DraftKingsConnector extends BookConnector {
     for (const [id, at] of this.tombstones) if (now - at > 2 * this.reconcileIntervalMs) this.tombstones.delete(id);
   }
 
+  /** A timer that `stop()` cancels, and that does nothing if it fires after a stop. */
   private timeout(ms: number, fn: () => void | Promise<void>): NodeJS.Timeout {
     const t = setTimeout(() => {
       this.timers.delete(t);
@@ -977,14 +1012,16 @@ export class DraftKingsConnector extends BookConnector {
     return t;
   }
 
+  /** Run `fn` every `ms`, measured from the end of the previous run (so runs never overlap); errors are logged. */
   private every(ms: number, fn: () => void | Promise<void>): void {
+    const run = this.runId;
     this.timeout(ms, async () => {
       try {
         await fn();
       } catch (err) {
         this.log(`periodic task failed: ${errMsg(err)}`);
       } finally {
-        this.every(ms, fn);
+        if (this.running && this.runId === run) this.every(ms, fn);
       }
     });
   }
@@ -999,6 +1036,7 @@ function closeFloorMs(code: number): number {
   return 0;
 }
 
+/** Which main line a DK market is, or null for anything else (alternate lines, props, halves...). */
 function marketTypeOf(m: DkMarket): MarketType | null {
   const name = (m.marketType?.name ?? m.name ?? '').toLowerCase();
   if (name === 'moneyline') return 'moneyline';
@@ -1016,15 +1054,18 @@ function parseTime(value: string | undefined): number | null {
   return Number.isFinite(t) ? t : null;
 }
 
+/** 1 for the selection DK marks as its main line, else 0: preferred when old and new lines briefly coexist. */
 const rank = (s: Tracked<DkSelection>) => (s.v.main === true || s.v.tags?.includes('MainPointLine') ? 1 : 0);
 const newBatch = (): Batch => ({ events: new Set(), markets: new Set(), removedQuotes: [] });
 
+/** Add `id` to the set stored under `key` (creating it). */
 function index(map: Map<string, Set<string>>, key: string, id: string): void {
   const set = map.get(key) ?? new Set<string>();
   set.add(id);
   map.set(key, set);
 }
 
+/** The fields a partial `change` patch actually carries, so merging it can't blank fields it omits. */
 function definedFields<T extends object>(patch: T): Partial<T> {
   return Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as Partial<T>;
 }

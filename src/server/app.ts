@@ -21,8 +21,14 @@ export interface AppDeps {
   logger?: boolean;
 }
 
-/** Beacons per IP per minute; each holds at most 200 samples (enforced by the tracker). */
+/** Beacons per IP per minute; each holds at most MAX_BEACON_SAMPLES samples (enforced by the tracker). */
 const BEACONS_PER_MINUTE = 10;
+/**
+ * Body limit for `POST /api/latency` only. A full beacon (MAX_BEACON_SAMPLES samples at ~136 bytes) is
+ * ~41 KB, well past the app-wide 16 KB limit, which would reject the busiest windows outright (HTTP 413).
+ * 64 KiB is the most `navigator.sendBeacon` will queue anyway.
+ */
+const BEACON_BODY_LIMIT = 64 * 1024;
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const { board, hub, latency, cfg } = deps;
@@ -46,8 +52,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.get('/api/health', async () => ({ ...board.health(), sse: hub.stats(), uptimeSec: Math.round(process.uptime()), ...deps.extraHealth?.() }));
   app.get('/api/metrics', async () => ({ latency: latency.snapshot(), sse: hub.stats(), board: board.counters }));
 
+  // Fixed one-minute window per client IP; the map is simply cleared if it ever grows past 10k IPs.
   const beacons = new Map<string, { windowStart: number; count: number }>();
-  app.post('/api/latency', async (req, reply) => {
+  app.post('/api/latency', { bodyLimit: BEACON_BODY_LIMIT }, async (req, reply) => {
     const now = Date.now();
     const b = beacons.get(req.ip);
     if (!b || now - b.windowStart > 60_000) beacons.set(req.ip, { windowStart: now, count: 1 });
@@ -66,8 +73,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   }
 
   if (existsSync(cfg.webDir)) {
-    await app.register(fastifyStatic, { root: cfg.webDir, wildcard: false, maxAge: '1h', immutable: false });
-    app.setNotFoundHandler((req, reply) => (req.url.startsWith('/api/') ? reply.code(404).send({ error: 'not found' }) : reply.type('text/html').sendFile('index.html')));
+    await app.register(fastifyStatic, {
+      root: cfg.webDir,
+      wildcard: false,
+      // Vite fingerprints everything under assets/, so those are cached for good. index.html is revalidated on
+      // every load, so a deploy reaches returning visitors at once and no cached page names deleted assets.
+      cacheControl: false,
+      setHeaders: (reply, filePath) => reply.header('cache-control', /[\\/]assets[\\/]/.test(filePath) ? 'public, max-age=31536000, immutable' : 'no-cache'),
+    });
+    // Client-side URLs (e.g. `/?game=…` reloaded) get the app shell. A missing API route or asset is a real
+    // 404: answering an old asset URL with HTML would hand the browser a page where it expects a script.
+    app.setNotFoundHandler((req, reply) =>
+      req.url.startsWith('/api/') || req.url.startsWith('/assets/') ? reply.code(404).send({ error: 'not found' }) : reply.type('text/html').sendFile('index.html'),
+    );
   }
   return app;
 }

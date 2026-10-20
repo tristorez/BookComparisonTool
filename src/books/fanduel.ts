@@ -51,7 +51,9 @@ const SUBSCRIPTION_BATCH = 350;
 
 /** A healthy SMP read takes 10–60 ms; a hung one must not stall the 1 s cadence. */
 const POLL_TIMEOUT_MS = 2_000;
+/** Board page reads (and key-refresh downloads); the board page is large and only needed every 30 s. */
 const DISCOVERY_TIMEOUT_MS = 8_000;
+/** First retry delay while the board is failing or empty; doubles up to the regular discovery interval. */
 const DISCOVERY_RETRY_BASE_MS = 2_000;
 /** On-demand rediscovery (a market vanished from SMP) is rate-limited to this gap. */
 const DISCOVERY_MIN_GAP_MS = 5_000;
@@ -61,6 +63,7 @@ const MISSED_DISCOVERIES_BEFORE_DROP = 2;
 const MISSED_POLLS_BEFORE_CLOSED = 3;
 /** The CDN-cached board keeps listing a closed market for up to ~90 s; don't re-adopt it meanwhile. */
 const CLOSED_TOMBSTONE_MS = 120_000;
+/** After start, a channel that hasn't connected or polled yet is reported as pending, not failing. */
 const STARTUP_GRACE_MS = 10_000;
 
 // Liveness: AppSync answers WebSocket pings ~1 s late (measured) and sends `ka` only every 60 s, so a
@@ -74,9 +77,10 @@ const RECONNECT_MAX_MS = 30_000;
 const STABLE_CONNECTION_MS = 30_000;
 const BLOCKED_BASE_MS = 30_000;
 const BLOCKED_MAX_MS = 600_000;
+/** First retry after AppSync rejects or ends a subscription; backs off up to RECONNECT_MAX_MS. */
 const SUBSCRIBE_RETRY_BASE_MS = 1_000;
 
-
+/** PIR's subscription: each `data` message is one market's full price state (every runner). */
 const PIR_SUBSCRIPTION = `subscription OnUpdateMarketPrice($ids: [String!]!) {
   onUpdateMarketPrice(ids: $ids) {
     marketId marketStatus inplay updatedAt
@@ -139,10 +143,15 @@ interface FdPriceUpdate {
  * had shown a transient state push never sends). Neither prevented a single wrong-way flip.
  */
 export class MarketMerge {
+  /** Signature (`signatureOf`) of the state on screen; '' forces the next observation to be shown. */
   shown = '';
   private lastPushBookTime = 0;
 
-  /** Offer one observed market state; returns true if it should be shown. */
+  /**
+   * Offer one observed market state; returns true if it should be shown. `_at` and `_pushLive` are unused
+   * since the two guards above were removed; they stay in the signature so the replay harness can run
+   * alternative strategies through the same call.
+   */
   offer(channel: Channel, sig: string, _at: number, bookTime: number | null, _pushLive: boolean): boolean {
     if (channel === 'push' && bookTime !== null) {
       if (bookTime < this.lastPushBookTime) return false; // out of order
@@ -154,16 +163,22 @@ export class MarketMerge {
   }
 }
 
+/** One main-line market we price, by FD market id. */
 interface TrackedMarket {
   marketId: string;
   eventId: string;
   gameKey: string;
   type: MarketType;
+  /** FD runner (selection) id → our side, from the board's runner `result.type`. */
   sides: Map<number, Side>;
   inPlay: boolean;
+  /** Push/poll race state for this market (see MarketMerge). */
   merge: MarketMerge;
+  /** Consecutive board refreshes that did not list it (dropped at MISSED_DISCOVERIES_BEFORE_DROP). */
   missedDiscoveries: number;
+  /** Consecutive SMP answers that left it out (closed at MISSED_POLLS_BEFORE_CLOSED). */
   missedPolls: number;
+  /** Logged an unknown runner once already (FD added a selection the board refresh hasn't shown us). */
   warnedUnknownRunner: boolean;
 }
 
@@ -209,14 +224,22 @@ export class FanDuelConnector extends BookConnector {
   private readonly closedMarkets = new Map<string, number>(); // marketId -> closed at
   private readonly timers = new Set<NodeJS.Timeout>();
   private running = false;
+  /**
+   * Incremented by every `start()`. A loop whose step was in flight across a stop/start (the board's
+   * frozen-feed restart, the chaos routes) sees a newer run and stops re-arming, so the restart can't
+   * leave two poll loops behind.
+   */
+  private runId = 0;
   private startedAt = 0;
 
+  /** Consecutive failed board refreshes: drives the retry backoff, and 3+ is reported. */
   private discoveryFailures = 0;
   private discoveryInFlight: Promise<void> | null = null;
   private discoveryTimer: NodeJS.Timeout | undefined;
   private lastDiscoveryAt = 0;
   private lastCompetitionWarningAt = 0;
 
+  /** Consecutive failed SMP polls (backoff); `pollBlocked` says why when FD is refusing us. */
   private pollFailures = 0;
   private pollBlocked: string | null = null;
   private lastPollOkAt = 0;
@@ -224,8 +247,11 @@ export class FanDuelConnector extends BookConnector {
   private ws: WebSocket | null = null;
   /** Incremented per push connection; handlers of an older socket become no-ops. */
   private pushEpoch = 0;
+  /** AppSync acknowledged `connection_init`: subscriptions may be started. */
   private wsAcked = false;
+  /** Consecutive failed connections, for the reconnect backoff; reset once a connection proves stable. */
   private wsAttempt = 0;
+  /** Last message or pong on the push socket, for the silence watchdog and push health. */
   private wsLastSeenAt = 0;
   private pushBlocked: string | null = null;
   /** Acknowledged subscriptions currently delivering prices, and the market set they cover. */
@@ -233,6 +259,7 @@ export class FanDuelConnector extends BookConnector {
   private liveSignature = '';
   /** A replacement subscription set, started but not yet fully acknowledged. */
   private nextSubs: { ids: string[]; acked: Set<string>; signature: string } | null = null;
+  /** Consecutive subscription failures, for the resubscribe backoff; reset when a set is promoted. */
   private subscribeAttempt = 0;
 
   constructor(opts: FanDuelOptions = {}) {
@@ -251,6 +278,7 @@ export class FanDuelConnector extends BookConnector {
   async start(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    this.runId++;
     this.startedAt = Date.now();
     this.setStatus('connecting');
     // The socket handshake overlaps the first board read; subscriptions start as soon as markets are known.
@@ -446,6 +474,9 @@ export class FanDuelConnector extends BookConnector {
           for (const m of this.markets.values()) {
             if (m.eventId !== eventId) continue;
             m.gameKey = key;
+            // The new key starts with no quotes, so the next observation must be shown even though the
+            // prices themselves have not moved (MarketMerge would otherwise drop it as already shown).
+            m.merge.shown = '';
             fresh.push(m.marketId);
           }
         }
@@ -507,8 +538,9 @@ export class FanDuelConnector extends BookConnector {
     this.syncSubscriptions();
   }
 
+  /** Forget events that no longer have a tracked market; returns their game keys for `removedGames`. */
   private retireEmptyEvents(): string[] {
-    const live = new Set<TrackedMarket["eventId"]>();
+    const live = new Set<TrackedMarket['eventId']>();
     for (const m of this.markets.values()) live.add(m.eventId);
     const removed: string[] = [];
     for (const [eventId, g] of this.events) {
@@ -521,7 +553,9 @@ export class FanDuelConnector extends BookConnector {
 
   // ---------------------------------------------------------------- SMP polling
 
+  /** One SMP poll of every tracked market after `delayMs`, then the next on the wall-clock grid (backing off on failure). */
   private schedulePoll(delayMs: number): void {
+    const run = this.runId;
     this.timeout(delayMs, async () => {
       let delay: number;
       try {
@@ -540,7 +574,7 @@ export class FanDuelConnector extends BookConnector {
         }
       }
       this.evaluateHealth();
-      if (this.running) this.schedulePoll(delay);
+      if (this.running && this.runId === run) this.schedulePoll(delay);
     });
   }
 
@@ -584,6 +618,7 @@ export class FanDuelConnector extends BookConnector {
     this.requestDiscovery(`${closed.length} market(s) no longer priced`);
   }
 
+  /** Stop tracking a closed market, and keep the board refresh from re-adopting it for CLOSED_TOMBSTONE_MS. */
   private closeMarket(m: TrackedMarket): void {
     this.markets.delete(m.marketId);
     this.closedMarkets.set(m.marketId, Date.now());
@@ -591,6 +626,11 @@ export class FanDuelConnector extends BookConnector {
 
   // ---------------------------------------------------------------- PIR push
 
+  /**
+   * Open the PIR socket (AppSync's `graphql-ws` protocol, authenticated by FD's public client key in the
+   * URL): `connection_init` → `connection_ack`, then `start` per subscription batch → `start_ack`, then
+   * `data` messages; `ka` keepalives every 60 s. Reconnects with backoff on any close.
+   */
   private connectPush(): void {
     if (!this.running || this.ws) return;
     const epoch = ++this.pushEpoch;
@@ -734,6 +774,7 @@ export class FanDuelConnector extends BookConnector {
     if (!gen.ids.length) this.promoteSubscriptions(gen);
   }
 
+  /** A `start_ack` for the replacement set; once every batch is acknowledged, the set takes over. */
   private onSubscriptionAck(id: string): void {
     const gen = this.nextSubs;
     if (!gen || !gen.ids.includes(id)) return;
@@ -741,6 +782,7 @@ export class FanDuelConnector extends BookConnector {
     if (gen.acked.size === gen.ids.length) this.promoteSubscriptions(gen);
   }
 
+  /** Make `gen` the live set and only then stop the old one (make-before-break). */
   private promoteSubscriptions(gen: { ids: string[]; signature: string }): void {
     for (const old of this.liveSubs) this.ws?.send(JSON.stringify({ id: old, type: 'stop' }));
     this.liveSubs = gen.ids;
@@ -768,6 +810,7 @@ export class FanDuelConnector extends BookConnector {
     this.evaluateHealth();
   }
 
+  /** Push is delivering: the socket is acknowledged and at least one subscription is live. */
   private get pushLive(): boolean {
     return this.wsAcked && this.liveSubs.length > 0;
   }
@@ -777,6 +820,7 @@ export class FanDuelConnector extends BookConnector {
     void this.refreshKeys('FanDuel rejected the push key');
   }
 
+  /** AppSync's API-key auth object: sent (base64) in the socket URL and with every `start`. */
   private pirAuth() {
     return { Authorization: this.pirKey, host: `pir.${this.region}.sportsbook.fanduel.com` };
   }
@@ -851,6 +895,11 @@ export class FanDuelConnector extends BookConnector {
 
   // ---------------------------------------------------------------- health & plumbing
 
+  /**
+   * Derive the status from both channels. No markets: down if the board refresh is failing, else
+   * connecting. Neither push nor polling working: connecting during the startup grace, else down.
+   * Otherwise degraded if anything is wrong (e.g. push down while polls work), else live.
+   */
   private evaluateHealth(): void {
     if (!this.running) return;
     const now = Date.now();
@@ -869,12 +918,14 @@ export class FanDuelConnector extends BookConnector {
     else this.setStatus(problems.length ? 'degraded' : 'live', problems.join('; ') || null);
   }
 
+  /** Every second: expire closed-market tombstones and re-derive health (silence counts even without events). */
   private housekeeping(): void {
     const now = Date.now();
     for (const [id, at] of this.closedMarkets) if (now - at > CLOSED_TOMBSTONE_MS) this.closedMarkets.delete(id);
     this.evaluateHealth();
   }
 
+  /** A JSON request with the headers FD's own site sends. */
   private getJson<T>(url: string, init: { method?: 'GET' | 'POST'; body?: string; timeoutMs: number }) {
     return requestJson<T>(url, {
       dispatcher: this.http,
@@ -892,6 +943,7 @@ export class FanDuelConnector extends BookConnector {
     });
   }
 
+  /** A plain-text GET (FD's app shell and JS bundle, for `readKeysFromBundle`). */
   private async getText(url: string): Promise<string> {
     const res = await fetch(url, {
       headers: { 'User-Agent': BROWSER_UA, Accept: '*/*', 'Accept-Language': 'en-US,en;q=0.9', Referer: `${SITE}/` },
@@ -903,6 +955,7 @@ export class FanDuelConnector extends BookConnector {
     return text;
   }
 
+  /** A timer that `stop()` cancels, and that does nothing if it fires after a stop. */
   private timeout(ms: number, fn: () => void | Promise<void>): NodeJS.Timeout {
     const t = setTimeout(() => {
       this.timers.delete(t);
@@ -912,14 +965,16 @@ export class FanDuelConnector extends BookConnector {
     return t;
   }
 
+  /** Run `fn` every `ms`, measured from the end of the previous run (so runs never overlap); errors are logged. */
   private every(ms: number, fn: () => void | Promise<void>): void {
+    const run = this.runId;
     this.timeout(ms, async () => {
       try {
         await fn();
       } catch (err) {
         this.log(`periodic task failed: ${errMsg(err)}`);
       } finally {
-        this.every(ms, fn);
+        if (this.running && this.runId === run) this.every(ms, fn);
       }
     });
   }
@@ -960,6 +1015,7 @@ function isKeyRejection(err: unknown): err is HttpError {
   return err instanceof HttpError && [400, 404, 500].includes(err.status) && err.body.trim() === '{"error":true}';
 }
 
+/** AppSync reports a rejected key as an `UnauthorizedException` somewhere in the error payload. */
 const isUnauthorized = (payload: unknown) => JSON.stringify(payload ?? '').includes('UnauthorizedException');
 
 /** Identity of a market's displayed state: status, in-play flag, and every runner's line, price and status. */
@@ -971,6 +1027,7 @@ export function signatureOf(update: FdPriceUpdate, inPlay: boolean): string {
   return `${update.marketStatus ?? ''}|${inPlay}|${runners}`;
 }
 
+/** Runner id → side, from the board's runner `result.type` (HOME/AWAY/OVER/UNDER). */
 function sidesOf(m: FdMarket): Map<number, Side> {
   const sides = new Map<number, Side>();
   for (const r of m.runners ?? []) {
@@ -984,6 +1041,7 @@ function refsFor(m: TrackedMarket): QuoteRef[] {
   return quoteRefsFor(m.gameKey, m.type);
 }
 
+/** The game's teams from a moneyline or spread market's runner names, else from the event name ("Away @ Home"). */
 function teamsOf(ev: FdEvent, markets: FdMarket[]): { away: Team; home: Team } | null {
   for (const m of markets) {
     if (m.marketType === 'TOTAL_POINTS_(OVER/UNDER)') continue;
@@ -1005,4 +1063,5 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+/** JSON → base64 → URL-encoded, the form AppSync's realtime URL takes for `header` and `payload`. */
 const b64 = (value: unknown) => encodeURIComponent(Buffer.from(JSON.stringify(value)).toString('base64'));

@@ -24,6 +24,7 @@ export interface LatencyOptions {
   events?: { document: Listenable; window: Listenable } | null;
 }
 
+/** `sendBeacon` survives the page unloading; `fetch` with `keepalive` is the fallback where it's missing. */
 function defaultSend(url: string, body: string): boolean {
   if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
     return navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
@@ -54,7 +55,9 @@ export class LatencyRecorder {
   private readonly events: { document: Listenable; window: Listenable } | null;
 
   private samples: LatencySample[] = [];
+  /** Samples offered since the last report: the denominator of the reservoir sampling in `add`. */
   private seen = 0;
+  /** Bumped on every visibility change, so a paint measurement that spans one is thrown away. */
   private epoch = 0;
   private timer: ReturnType<typeof setInterval> | undefined;
 
@@ -141,6 +144,7 @@ export class LatencyRecorder {
     this.events?.window.removeEventListener('pagehide', this.onPageHide);
   }
 
+  /** Reservoir sampling (Algorithm R): past `cap`, every sample offered so far is kept with equal probability. */
   private add(s: LatencySample): void {
     this.seen += 1;
     if (this.samples.length < this.cap) {

@@ -1,12 +1,10 @@
 /**
- * Runtime values from the shared contract (`src/shared`). Types are imported from `@shared/*`
- * directly; they are erased at build time.
+ * Runtime values from the shared contract (`src/shared`), re-exported for the web app's modules. Types are
+ * imported from `@shared/*` directly; they are erased at build time.
  *
- * These values come in by relative path because the root `vitest.config.ts` builds its `@shared`
- * alias with `new URL(...).pathname`. That percent-encodes the space in this repo's folder name
- * ("Betstamp%20Technical"), so under vitest `@shared` only resolves for type-only imports.
- * `web/vite.config.ts` resolves the alias correctly. Once the root config uses `fileURLToPath`, this
- * file can re-export from `@shared/wire` and `@shared/domain` instead.
+ * `@shared` resolves to `src/shared` in both `web/vite.config.ts` and the root `vitest.config.ts` (each
+ * builds the alias with `fileURLToPath`, which keeps the space in this repo's folder name intact), so
+ * runtime values come through the alias like everything else.
  */
-export { cellKey, parseSseId, quoteKey, sseId } from '../../../src/shared/wire';
-export { MARKETS, MARKET_SIDES } from '../../../src/shared/domain';
+export { cellKey, parseSseId, quoteKey, sseId } from '@shared/wire';
+export { MARKETS, MARKET_SIDES } from '@shared/domain';

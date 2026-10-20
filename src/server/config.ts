@@ -101,7 +101,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     feedId,
     http: { host: env.HOST ?? (production ? '127.0.0.1' : '0.0.0.0'), port: int(env, 'PORT', 8080, 1) },
     books,
-    fake: fakeAll ? { seed: int(env, 'FAKE_SEED', 7), ratePerSec: int(env, 'FAKE_RATE', 4), modes } : null,
+    // FAKE_RATE ≥ 1: at 0 the fake book's tick would be Infinity ms, which setTimeout turns into 1 ms (a busy loop).
+    fake: fakeAll ? { seed: int(env, 'FAKE_SEED', 7), ratePerSec: int(env, 'FAKE_RATE', 4, 1), modes } : null,
     dk: { state: env.DK_STATE ?? 'nj', proxyUrl: opt(env.DK_PROXY_URL), restProxyUrl: opt(env.DK_REST_PROXY_URL), wsProxyUrl: opt(env.DK_WS_PROXY_URL) },
     fd: {
       region: env.FD_REGION ?? 'nj',

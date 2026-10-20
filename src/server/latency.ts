@@ -39,6 +39,7 @@ export interface Percentiles {
   max: number;
 }
 
+/** The most recent `cap` values (a ring buffer, so percentiles describe recent behavior); `total` counts every value ever pushed. */
 class Reservoir {
   private readonly buf: number[] = [];
   private next = 0;
@@ -63,6 +64,10 @@ export class LatencyTracker {
   private readonly series = new Map<string, { metric: Metric; labels: Labels; r: Reservoir }>();
   /** First copies delivered per book × feed (which box wins the race). */
   private readonly firstCopies = new Map<string, number>();
+  /**
+   * Smallest bookToServer value ever seen per book: a floor on network + clock offset. Near zero is
+   * plausible; a negative value means our clock runs behind the book's.
+   */
   private readonly skewFloor = new Map<BookId, number>();
   /** Feeds the server itself has seen deliver a first copy; browser beacons may only label these. */
   private readonly knownFeeds = new Set<FeedId>();
@@ -72,6 +77,7 @@ export class LatencyTracker {
     private readonly cap = 5_000,
   ) {}
 
+  /** Add one value to the (metric, labels) series, creating the series on first use. Non-finite values are ignored. */
   record(metric: Metric, labels: Labels, ms: number): void {
     if (!Number.isFinite(ms)) return;
     const key = `${metric}|${labels.book ?? ''}|${labels.phase ?? ''}|${labels.channel ?? ''}|${labels.feed ?? ''}`;
@@ -81,6 +87,7 @@ export class LatencyTracker {
     if (metric === 'bookToServer' && labels.book) this.skewFloor.set(labels.book, Math.min(this.skewFloor.get(labels.book) ?? Infinity, ms));
   }
 
+  /** A feed delivered the first copy of a change; also makes `feed` a label beacons may use. */
   firstCopy(book: BookId, feed: FeedId): void {
     const key = `${book}|${feed}`;
     this.knownFeeds.add(feed);
@@ -113,6 +120,7 @@ export class LatencyTracker {
     return n;
   }
 
+  /** Every series as percentiles, for `/api/metrics`. */
   snapshot() {
     return {
       note: 'FanDuel book timestamps are whole seconds: its book→X values are upper bounds; the true value lies in (raw − resolution, raw].',

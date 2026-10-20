@@ -74,6 +74,7 @@ export interface BookStatus {
   lastDataAt: number | null;
   /** Last time a price, line or status actually changed. */
   lastChangeAt: number | null;
+  /** When `state` was entered. */
   since: number;
 }
 
@@ -115,8 +116,10 @@ export abstract class BookConnector extends EventEmitter<ConnectorEvents> {
   abstract start(): Promise<void>;
   abstract stop(): Promise<void>;
 
+  // What consumers have been told: games by game key, quotes by `quoteKey`.
   private readonly gameState = new Map<string, BookGame>();
   private readonly quoteState = new Map<string, Quote>();
+  /** Each channel's last reported state per quote (`<channel>|<quoteKey>` → state), so samples are emitted on change only. */
   private readonly sampleState = new Map<string, string>();
   private statusState: BookStatus | null = null;
   /** Listener exceptions caught by `dispatch`; a consumer bug must never take ingestion down. */

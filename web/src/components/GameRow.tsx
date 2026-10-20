@@ -8,6 +8,7 @@ import { ChevronRightIcon } from './icons';
 import { PriceCell } from './PriceCell';
 import { Tip } from './Tip';
 
+/** Column and section headings, shared with the game page. */
 export const MARKET_LABEL: Record<MarketType, string> = { spread: 'Spread', total: 'Total', moneyline: 'Moneyline' };
 const ROWS = [0, 1] as const; // away/over on top, home/under below
 
@@ -92,6 +93,7 @@ export const GameRow = memo(function GameRow({ game, view, onOpen }: GameRowProp
   );
 });
 
+/** A real link to the game page (so a new tab or a copied link works); a plain click opens it in place. */
 function CompareLink({ game, onOpen }: { game: WireGame; onOpen: (game: GameKey) => void }) {
   return (
     <a
@@ -111,6 +113,7 @@ function CompareLink({ game, onOpen }: { game: WireGame; onOpen: (game: GameKey)
   );
 }
 
+/** Team code plus its name: the nickname on phones, the full name from `sm` up. */
 export function TeamName({ code, name }: { code: string; name: string }) {
   return (
     <span className="flex min-w-0 flex-col sm:flex-row sm:items-baseline sm:gap-2">
@@ -123,6 +126,7 @@ export function TeamName({ code, name }: { code: string; name: string }) {
   );
 }
 
+/** Shown instead of the kickoff time while any book has the game in play. */
 export function LiveBadge() {
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold tracking-wider text-rose-300 uppercase ring-1 ring-rose-400/30">
@@ -132,6 +136,7 @@ export function LiveBadge() {
   );
 }
 
+/** The board's cross-book sanity check failed for this game (`WireGame.suspect`). */
 export function SuspectBadge() {
   return (
     <Tip

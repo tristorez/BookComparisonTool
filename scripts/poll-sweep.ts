@@ -56,9 +56,14 @@ function timeline(obs: Obs[]): Map<string, Ev[]> {
   return out;
 }
 
+/**
+ * One config's observations: the first poll (every config starts from it, push-only included, since the
+ * connector reads SMP once when it discovers a market even with polling off), every `every`-th later poll
+ * at offset `phase` (`every` 0 = no polling), and the push frames if `usePush`.
+ */
 const build = (usePush: boolean, every: number, phase: number): Obs[] => {
   const o: Obs[] = [];
-  polls.forEach((p, i) => { if (every > 0 && (i === 0 || (i - 1) % every === phase % every)) o.push(...p); });
+  polls.forEach((p, i) => { if (i === 0 || (every > 0 && (i - 1) % every === phase % every)) o.push(...p); });
   if (usePush) o.push(...pushObs.filter((x) => x.t >= startAt));
   return o;
 };

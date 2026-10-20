@@ -401,12 +401,14 @@ function displayChanged(a: WireBest, b: WireBest): boolean {
   return isPick(a) !== isPick(b);
 }
 
+/** Same registry, field by field, so a snapshot that changes nothing keeps the cached array (and `useBooks` doesn't re-render). */
 function sameBooks(a: readonly WireBookMeta[], b: readonly WireBookMeta[]): boolean {
   return (
     a.length === b.length &&
     a.every((x, i) => {
       const y = b[i];
-      return y !== undefined && x.id === y.id && x.name === y.name && x.short === y.short && x.color === y.color;
+      // `region` too: a board restarted with another jurisdiction must update the footer's "NJ lines" note.
+      return y !== undefined && x.id === y.id && x.name === y.name && x.short === y.short && x.color === y.color && x.region === y.region;
     })
   );
 }

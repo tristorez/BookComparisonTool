@@ -100,6 +100,21 @@ headers (±0.15 s). The browser beacons its own legs (server → browser, paint)
 | Backend → browser (public URL, pregame smoke test) | first byte 30 ms; delta emit → receive p50 10 ms (n = 3) |
 | Load: 500 viewers at ~18 deltas/s | 0 drops; emit → receive 44 / 158 / 460 ms (p50 / p90 / p99) |
 
+**What the numbers mean.** The path of one price change is: book's engine → book's publish step → book's
+gateway → internet → our feed box → merge and emit → internet → browser → paint.
+- **Book → server:** our receive time minus the book's own change timestamp: how old the price is when we get it.
+  It includes the book's internal delay plus the network to us. We report every frame per feed.
+- **DraftKings engine → publish:** `publishedTime − createdTime`, time *inside* DraftKings. Not network, not ours.
+- **DraftKings gateway → server:** our receive time minus DK's gateway stamp: time on the wire to our box. This is
+  the only leg that depends on where we host.
+- **Server processing:** first-copy receive to the delta being emitted (merge, best price, serialize).
+- **Second-copy lag:** how much later the slower feed box sees the same price. Not user-visible; it's the margin
+  the second box buys.
+- **Server → browser:** delta emitted to browser receive. **Paint:** receive to the next animation frame.
+  **Book → browser:** browser receive minus the book's timestamp, the end-to-end number.
+- FD's timestamps are whole seconds, so FD figures are upper bounds. Definitions and clock handling: see
+  `LatencyStats.txt`.
+
 **Game night: WAS @ SF, 2026-10-19 (8:00 pm ET, ~86 minutes live).** Book → our server, from the board on AWS
 (every frame, p50 / p90 / p99, ms). FD's whole-second timestamps make its figures upper bounds.
 
@@ -141,7 +156,7 @@ in `docs/latency/`.
 |---|---|---|
 | **Geo** | Not geofenced by state or country: AWS Ohio, Ashburn and Montréal all got byte-identical answers. We cannot choose a region: every state/province site name (`dkusnj`, `dkcaon`, `dkcaab`, even a made-up `zz`) returned the same bytes, so which jurisdiction its prices represent is unverified. | Region is chosen by hostname (`sbapi.<st>.sportsbook.fanduel.com`; Canada on `.ca`). 25 US states plus Ontario and Alberta answer; the other 26 states and the other provinces have no host. A Missouri IP reads NJ prices. Same keys work everywhere. |
 | **Bot protection** | Akamai on every host. It blocked our Contabo dev server by IP/ASN, and it scores the HTTP client (`fetch` gets 200 where `https.request` gets 403 from the same IP). Solved with AWS `us-east-2` IPs, one HTTP client, and a probe before any host goes live. | PerimeterX on the HTML site only; the API hosts answer normally. The WAF rejects requests with no User-Agent. |
-| **Rate limits** | None hit (one socket, one REST read per minute per box). | None hit (one SMP poll per second, one PIR socket per box). |
+| **Rate limits** | None hit. We run one socket and one REST read per minute per box. A stepped test from the t3.micro (8 s per step) ran the REST snapshot at 1, 2, 5 and 10 req/s: 144 requests, all 200, p50 105–139 ms. | None hit. We run one SMP poll per second, one PIR socket and a board refresh every 30 s per box. The same test ran SMP prices (70 markets) at 2, 5, 10 and 20 req/s: 296 requests, all 200, p50 15–27 ms. The board page ran at 1, 2 and 4 req/s: 56 requests, all 200. |
 | **Credentials** | `"default-token"`, with a JWT fallback. | Public keys, re-read from the live bundle on rotation. |
 
 **Geo, in more detail (tested 2026-10-19, one pregame snapshot, from AWS Montréal, Ashburn and Ohio).**
@@ -157,6 +172,12 @@ in `docs/latency/`.
   (see Bot protection), not geography.
 - **Limits:** one pregame snapshot; no live markets, promos or logged-in prices tested; DraftKings'
   jurisdiction stays unverified because it ignores the region we request.
+
+**Rate-limit test (2026-10-19, from the production t3.micro, during live traffic).** Each endpoint was
+stepped up for 8 s per step and stopped at the first non-200. Nothing was refused, so we did not find a
+ceiling: these are floors, not limits. The shipped rates (1 SMP poll per second per box) are well below
+them. Short bursts from one IP say nothing about sustained rates or other IPs, and we did not push
+higher to avoid burning the feed's IP.
 
 When a book refuses us (401/403/429) the refused channel backs off (up to 10 minutes, honouring
 `Retry-After`), the book is reported blocked, and the other book and the second feed box keep the board

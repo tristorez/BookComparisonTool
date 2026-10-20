@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* Neutral graphite surfaces, one restrained green accent. Every text color below keeps at least 4.5:1 against every
-   surface it sits on, including the hatched pattern (faint: 4.7:1 there, 5.9:1 on a card). */
+   surface it sits on, including the hatched pattern (faint: 4.55:1 there, 5.7:1 on a card). */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --color-navy-950: #0e0f11; /* page */
@@ -10,8 +10,8 @@
   --color-navy-800: #212227; /* chips, toggle */
   --color-navy-700: #2a2b31; /* tooltip */
   --color-ink: #ececee; /* primary text */
-  --color-muted: #a6a7ae; /* secondary text */
-  --color-faint: #8b8c94; /* tertiary text */
+  --color-muted: #a8a9b0; /* secondary text */
+  --color-faint: #8f9098; /* tertiary text */
   --color-accent: #5fc08e; /* muted green */
 }
 
@@ -34,7 +34,7 @@
 /* Price-move flash: green when the move favors the bettor, red when it doesn't. The price element is
    re-keyed by a per-cell move counter, so each move mounts a fresh element and replays the animation;
    there are no per-cell timers. Only the background animates, so text keeps its own color; at the peak
-   tint ink is 9:1 and muted text 4.9:1. */
+   tint ink is 9:1 and muted text 4.53:1. */
 @keyframes price-up {
   0%,
   15% {

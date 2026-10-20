@@ -67,7 +67,7 @@ function BackLink({ onBack }: { onBack: () => void }) {
         onBack();
       }}
       data-back
-      className="inline-flex items-center gap-1 self-start rounded-md py-0.5 pr-1.5 text-sm text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/70"
+      className="inline-flex items-center gap-1 self-start rounded-md py-0.5 pr-1.5 text-sm text-muted hover:text-ink focus-ring"
     >
       <ChevronLeftIcon className="size-4" />
       All games
@@ -189,7 +189,7 @@ function SideHeading({ game, market, side }: { game: WireGame; market: MarketTyp
   const [code, name] = side === 'away' ? [game.away, game.awayName] : [game.home, game.homeName];
   return (
     <span className="flex min-w-0 flex-col items-center leading-tight">
-      <span className="text-sm font-bold text-ink">{code}</span>{' '}
+      <span className="text-sm font-semibold text-ink">{code}</span>{' '}
       <span className="max-w-full truncate text-[11px] text-muted">{nickname(name)}</span>
     </span>
   );

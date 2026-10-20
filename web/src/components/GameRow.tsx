@@ -105,7 +105,7 @@ function CompareLink({ game, onOpen }: { game: WireGame; onOpen: (game: GameKey)
       }}
       aria-label={`Compare every book: ${game.awayName} at ${game.homeName}`}
       data-compare
-      className="inline-flex items-center gap-0.5 rounded-sm text-[11px] font-medium text-accent/90 outline-none hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/70"
+      className="inline-flex items-center gap-0.5 rounded-sm text-[11px] font-medium text-accent/90 hover:text-accent focus-ring"
     >
       <span className="hidden sm:inline">Compare</span>
       <ChevronRightIcon className="size-3.5" />

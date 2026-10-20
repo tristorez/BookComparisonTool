@@ -28,7 +28,7 @@ export function Tip({ tip, children, align = 'center', className = '', triggerCl
       <span
         tabIndex={0}
         aria-describedby={id}
-        className={`cursor-help rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-accent/70 ${triggerClassName}`}
+        className={`cursor-help rounded-sm focus-ring ${triggerClassName}`}
       >
         {children}
       </span>

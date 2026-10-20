@@ -55,9 +55,8 @@ export function ViewToggle({ books, view, onChange }: ViewToggleProps) {
             tabIndex={i === selected ? 0 : -1}
             onClick={() => onChange(o.id)}
             // Selected: the accent pill (8.6:1 against the header; a hovered tab stays a faint grey). In
-            // Windows high contrast, which repaints backgrounds, an underline marks it instead, and
-            // outline-hidden keeps a visible focus outline where the ring is dropped.
-            className={`shrink-0 rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:outline-hidden forced-colors:aria-selected:underline ${
+            // Windows high contrast, which repaints backgrounds, an underline marks it instead.
+            className={`shrink-0 rounded-md px-3 py-1 text-sm font-medium whitespace-nowrap transition-colors focus-ring forced-colors:aria-selected:underline ${
               active ? 'bg-accent text-navy-950' : 'text-muted hover:bg-white/5 hover:text-ink'
             }`}
           >

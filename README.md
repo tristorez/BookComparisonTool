@@ -24,7 +24,8 @@ npm run build && npm start   # production: one Node process serves the API, the 
 ```
 
 Settings are environment variables (`src/server/config.ts`, [`.env.example`](.env.example)). The
-connectors also run alone: `npm run watch:fd`, `npm run watch:dk`, `npm run watch`.
+connectors also run alone: `npm run watch:fd`, `npm run watch:dk`, `npm run watch` (every book), or
+`npm run watch -- <book>`.
 
 **Where you run it matters.** DraftKings' Akamai edge blocks many datacenter IPs (our dev VPS included).
 `node scripts/probe-egress.mjs` reports which channels a machine can reach. If DK is blocked, use
@@ -46,8 +47,6 @@ connectors also run alone: `npm run watch:fd`, `npm run watch:dk`, `npm run watc
 
 - **One ingestion per book, not per tab.** Connectors own their connections and emit normalized
   changes. Fan-out happens after normalization: each delta is serialized once and sent to every viewer.
-- **A third book is a new translator, not a re-architecture.** `BookConnector` (`src/books/types.ts`)
-  handles state, diffing, status and samples; a connector only maps its feed into games and quotes.
 - **Deployment:** AWS `us-east-2`, two feed boxes on separate IPs (A also runs the board and the site, B
   is feed-only), Caddy for TLS and HTTP/2. FanDuel's push origin is 1–5 ms away from there.
 - **Matching:** games are keyed `YYYY-MM-DD(ET):AWAY@HOME` (books disagree on kickoff by a minute); teams
@@ -58,6 +57,19 @@ connectors also run alone: `npm run watch:fd`, `npm run watch:dk`, `npm run watc
   and an NFL push table (a 3-point margin is ~9% of games), and labelled `est.`. Where no model applies
   (totals, live spreads) the better line wins, labelled `by line`. The odds shown are always the book's
   actual odds.
+
+**Books are pluggable. Adding one (a third, or ten) takes three edits, not a re-architecture:**
+1. `src/books/<book>.ts`: a `BookConnector` subclass that maps the book's feed into games and quotes.
+   The base class keeps state, diffs changes, tracks status and emits latency samples. `teams.ts` lines
+   its games up with the other books', and `http.ts` / `odds.ts` handle requests, backoff and price parsing.
+2. Its id in `BOOK_IDS` (`src/shared/domain.ts`).
+3. One entry in `src/server/registry.ts`: name, badge color, staleness, timestamp resolution and how to
+   build the connector, plus its own settings in `config.ts` if it has any.
+
+The type checker flags a missing piece. Nothing else in the app names a book: config, the synthetic books
+(`BOOKS=fake`), the board and best price, the stream, the second feed box, the UI (toggle, status chips,
+game page) and `npm run watch -- <book>` all read the registry. `test/addBook.test.ts` runs a third book
+through the board and best price with no other change.
 
 ## 3. How we get the data from each book, and why
 
@@ -190,8 +202,10 @@ numbers.
 - Alerting for the cases that need a human (a book `down` for minutes; a key refresh that adopts nothing).
 - Fixture-based tests for FanDuel's lifecycle, the way the DK replay harness mocks DraftKings.
 - Verify which region DraftKings' feed represents (it ignores the jurisdiction name).
-- **A third book, or ten:** each is a new `BookConnector` translator; the repetitive part (finding
-  endpoints, mapping fields and team names) is where AI tooling helps. Point an agent at a site's bundle
-  and network capture and have it draft the connector and a replay fixture for human review.
+- **A third book, or ten:** the code side is the three edits in Architecture. The slow part is
+  reverse-engineering each site (endpoints, fields, team names, bot protection), and that is where AI
+  tooling helps: point an agent at a site's bundle and network capture and have it draft the connector
+  and a replay fixture for human review. Toward ten, give each book its own egress (process or box), since
+  each brings its own geo and bot-protection constraints.
 - Alternate lines and props (FD's event page carries `ALTERNATE_HANDICAP` / `ALTERNATE_TOTAL`; DK has
   alternate-line subcategories).

@@ -82,7 +82,7 @@ describe('board over real sockets: SSE + feed link', () => {
     const latency = new LatencyTracker();
     board = new Board({ books: [BOOKS.draftkings, BOOKS.fanduel], staleGraceMs: 300, staleAfterMs: { draftkings: 1_500, fanduel: 1_500 }, latency });
     for (const book of BOOK_IDS) {
-      const c = new FakeConnector(book, { seed: 3, ratePerSec: 30 });
+      const c = new FakeConnector(BOOKS[book], { seed: 3, ratePerSec: 30 });
       const h = board.addFeed('A', book, { getStatus: () => c.status });
       c.on('change', h.change);
       c.on('sample', h.samples);
@@ -99,7 +99,7 @@ describe('board over real sockets: SSE + feed link', () => {
     await linkServer.listen({ host: '127.0.0.1', port: 0 });
     link = new FeedLinkClient({ upstream: { host: '127.0.0.1', port: linkServer.port! }, token: TOKEN, feedId: 'B', log: () => {}, statusEveryMs: 200 });
     for (const book of BOOK_IDS) {
-      const c = new FakeConnector(book, { seed: 3, ratePerSec: 30 });
+      const c = new FakeConnector(BOOKS[book], { seed: 3, ratePerSec: 30 });
       link.attach(book, c);
       b.set(book, c);
     }

@@ -9,8 +9,9 @@
  */
 import { gameKey, NFL_TEAMS } from '../books/teams.js';
 import { BookConnector, type BookGame, type Quote, type QuoteRef } from '../books/types.js';
-import { MARKET_SIDES, type BookId, type Channel, type MarketType, type Side } from '../shared/domain.js';
+import { BOOK_IDS, MARKET_SIDES, type BookId, type Channel, type MarketType, type Side } from '../shared/domain.js';
 import { americanToDecimal } from '../shared/odds.js';
+import type { BookSpec } from './registry.js';
 
 export type FakeMode = 'normal' | 'fail' | 'freeze' | 'garbage' | 'massRemove';
 
@@ -74,6 +75,10 @@ function priced(type: MarketType, line: number | null, pFirst: number): FakeMark
 
 export class FakeConnector extends BookConnector {
   readonly book: BookId;
+  // The real book's shape, copied from its BookSpec: how often our polling beats push, and the
+  // resolution of its timestamps.
+  private readonly pollShare: number;
+  private readonly bookTimeResolutionMs: number;
   private readonly opts: Required<FakeOptions>;
   private readonly tickMs: number;
   private readonly bookSeed: number;
@@ -90,13 +95,17 @@ export class FakeConnector extends BookConnector {
   /** `massRemove` mode: the quotes already pulled (they are pulled once, then nothing moves). */
   private removed: QuoteRef[] = [];
 
-  constructor(book: BookId, opts: FakeOptions = {}) {
+  /** A synthetic book shaped like `spec` (registry.ts). */
+  constructor(spec: BookSpec, opts: FakeOptions = {}) {
     super();
+    const book = spec.id;
     this.book = book;
+    this.pollShare = spec.pollShare ?? 0;
+    this.bookTimeResolutionMs = spec.bookTimeResolutionMs;
     this.opts = { seed: 7, ratePerSec: 4, mode: 'normal', games: 8, troubleAfterMs: 15_000, ...opts };
     this.tickMs = Math.max(10, Math.round(1000 / this.opts.ratePerSec));
-    // Both books share the slate (same seed) but draw prices independently.
-    this.bookSeed = this.opts.seed * 31 + (book === 'draftkings' ? 1 : 2);
+    // Every book shares the slate (same seed) but draws its own prices, offset by its place in BOOK_IDS.
+    this.bookSeed = this.opts.seed * 31 + BOOK_IDS.indexOf(book) + 1;
     this.glitch = mulberry32(this.bookSeed + 0x5bd1e995);
     const slate = mulberry32(this.opts.seed);
     // Kickoffs hang off the UTC day, so processes started the same day agree on every game.
@@ -161,7 +170,7 @@ export class FakeConnector extends BookConnector {
     const opening = this.openings[Math.floor(r() * this.openings.length)]!;
     const line = opening.line === null ? null : opening.line + (r() < 0.3 ? (r() < 0.5 ? -0.5 : 0.5) : 0);
     const market = priced(opening.type, line, opening.pFirst + (r() - 0.5) * 0.06);
-    const channel: Channel = this.book === 'fanduel' && r() < 0.45 ? 'poll' : 'push';
+    const channel: Channel = this.pollShare > 0 && r() < this.pollShare ? 'poll' : 'push';
     return { opening, market, channel };
   }
 
@@ -213,8 +222,9 @@ export class FakeConnector extends BookConnector {
   private quote(game: BookGame, market: MarketType, side: Side, m: FakeMarket, channel: Channel, changedAt: number): Quote {
     const american = m.prices[side]!;
     const line = market === 'moneyline' ? null : market === 'spread' ? (side === 'home' ? m.line! : -m.line!) : m.line;
-    // Book timestamps at the real books' resolution: DK milliseconds, FD whole seconds (push only).
-    const bookTime = channel === 'push' ? (this.book === 'fanduel' ? Math.floor(changedAt / 1000) * 1000 : changedAt - 40) : null;
+    // Book timestamps at the real book's resolution (DK milliseconds, FD whole seconds), on push only.
+    const res = this.bookTimeResolutionMs;
+    const bookTime = channel === 'push' ? (res > 0 ? Math.floor(changedAt / res) * res : changedAt - 40) : null;
     return { book: this.book, gameKey: game.gameKey, market, side, line, american, decimal: americanToDecimal(american), suspended: false, live: game.live, bookTime, receivedAt: Date.now(), channel };
   }
 

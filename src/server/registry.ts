@@ -1,6 +1,10 @@
 /**
- * The books this deployment knows about. Adding a book: write its connector, add an entry here and to
- * `createConnector`; the board, the stream and the UI (toggle, badges) pick it up from this list.
+ * The books this deployment knows about, one entry each. Adding a book: write its connector
+ * (src/books/<book>.ts, a BookConnector subclass), add its id to BOOK_IDS (src/shared/domain.ts) and an
+ * entry here, plus a settings section in config.ts if it has any; the type checker asks for whatever is
+ * missing. Nothing else in the app names a book: config (BOOKS, FAKE_MODE_<short>,
+ * STALE_AFTER_<short>_MS), the synthetic books, the board and best price, the stream, the feed link, the
+ * UI (toggle, status chips, game page) and `npm run watch` all read this table.
  */
 import { DraftKingsConnector } from '../books/draftkings.js';
 import { FanDuelConnector } from '../books/fanduel.js';
@@ -18,38 +22,51 @@ export interface BookSpec extends WireBookMeta {
   staleAfterMs: number;
   /** Resolution of the book's own timestamps: DK createdTime is ms (0), FD updatedAt whole seconds. */
   bookTimeResolutionMs: number;
+  /**
+   * Share of price changes our own polling sees before push (default 0: push only). FD's 1 s poll was
+   * first on 151 of 337 live changes; the synthetic book (BOOKS=fake) splits its channels the same way.
+   */
+  pollShare?: number;
 }
 
-export const BOOKS: Record<BookId, BookSpec> = {
-  draftkings: { id: 'draftkings', name: 'DraftKings', short: 'DK', color: '#53d337', staleAfterMs: 15_000, bookTimeResolutionMs: 0 },
-  fanduel: { id: 'fanduel', name: 'FanDuel', short: 'FD', color: '#1493ff', staleAfterMs: 5_000, bookTimeResolutionMs: 1_000 },
-};
+interface BookEntry extends BookSpec {
+  /** The jurisdiction whose lines the connector reads, e.g. "nj". */
+  jurisdiction(cfg: Config): string;
+  /** This box's connector for the book, built from the book's settings section in `cfg`. */
+  create(cfg: Config): BookConnector;
+}
 
-export const BOOK_IDS = Object.keys(BOOKS) as BookId[];
+export const BOOKS: Record<BookId, BookEntry> = {
+  draftkings: {
+    id: 'draftkings',
+    name: 'DraftKings',
+    short: 'DK',
+    color: '#53d337',
+    staleAfterMs: 15_000,
+    bookTimeResolutionMs: 0,
+    jurisdiction: (cfg) => cfg.dk.state,
+    create: (cfg) => new DraftKingsConnector(cfg.dk),
+  },
+  fanduel: {
+    id: 'fanduel',
+    name: 'FanDuel',
+    short: 'FD',
+    color: '#1493ff',
+    staleAfterMs: 5_000,
+    bookTimeResolutionMs: 1_000,
+    pollShare: 0.45,
+    jurisdiction: (cfg) => cfg.fd.region,
+    create: (cfg) => new FanDuelConnector(cfg.fd),
+  },
+};
 
 /** The jurisdiction whose lines a book's connector reads, shown under the board; none for synthetic books. */
 export function regionOf(book: BookId, cfg: Config): string | undefined {
-  if (cfg.fake) return undefined;
-  switch (book) {
-    case 'draftkings':
-      return cfg.dk.state.toUpperCase();
-    case 'fanduel':
-      return cfg.fd.region.toUpperCase();
-  }
+  return cfg.fake ? undefined : BOOKS[book].jurisdiction(cfg).toUpperCase();
 }
 
+/** This box's connector for `book`; under BOOKS=fake, a synthetic book shaped like it. */
 export function createConnector(book: BookId, cfg: Config): BookConnector {
-  if (cfg.fake) return new FakeConnector(book, { seed: cfg.fake.seed, ratePerSec: cfg.fake.ratePerSec, mode: cfg.fake.modes[book] });
-  switch (book) {
-    case 'draftkings':
-      return new DraftKingsConnector({ state: cfg.dk.state, proxyUrl: cfg.dk.proxyUrl, restProxyUrl: cfg.dk.restProxyUrl, wsProxyUrl: cfg.dk.wsProxyUrl });
-    case 'fanduel':
-      return new FanDuelConnector({
-        region: cfg.fd.region,
-        push: cfg.fd.push,
-        pollIntervalMs: cfg.fd.pollIntervalMs,
-        pollPhaseMs: cfg.fd.pollPhaseMs,
-        proxyUrl: cfg.fd.proxyUrl,
-      });
-  }
+  if (cfg.fake) return new FakeConnector(BOOKS[book], { seed: cfg.fake.seed, ratePerSec: cfg.fake.ratePerSec, mode: cfg.fake.modes[book] });
+  return BOOKS[book].create(cfg);
 }

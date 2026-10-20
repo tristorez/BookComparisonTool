@@ -3,7 +3,9 @@
  * `src/books/types.ts` describes the same unions for the connectors; they are structurally identical.
  */
 
-export type BookId = 'draftkings' | 'fanduel';
+/** Every book the app can run. Adding one: its id here, its connector in src/books/, its entry in src/server/registry.ts. */
+export const BOOK_IDS = ['draftkings', 'fanduel'] as const;
+export type BookId = (typeof BOOK_IDS)[number];
 export type MarketType = 'moneyline' | 'spread' | 'total';
 export type Side = 'home' | 'away' | 'over' | 'under';
 /** How a value reached us: REST snapshot, server push, or our own polling. */

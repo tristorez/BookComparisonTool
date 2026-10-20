@@ -1,57 +1,47 @@
 /**
- * Run book connectors from the terminal and print normalized changes plus latency stats.
+ * Run book connectors from the terminal and print normalized changes plus latency stats. Books come from
+ * the registry (src/server/registry.ts), so a new connector can be watched here before it is on the board.
  *
  *   npm run watch:fd                     # FanDuel only
  *   npm run watch:dk                     # DraftKings only
- *   npm run watch                        # both, with a side-by-side board in each summary
+ *   npm run watch                        # every book, with a side-by-side board in each summary
+ *   npm run watch -- <book id>           # any registered book
  *
- * Env: FD_REGION, FD_POLL_MS, FD_POLL_PHASE_MS, FD_PUSH=0, FD_APP_KEY, FD_PIR_KEY, DK_STATE, DK_PROXY_URL,
- *      DK_REST_PROXY_URL, DK_WS_PROXY_URL, DK_TOKEN_MODE, WATCH_SECONDS (exit after N seconds),
- *      WATCH_SUMMARY_MS (default 30000), WATCH_QUIET=1.
+ * Env: the board's connector settings (src/server/config.ts, .env.example), e.g. FD_REGION, FD_POLL_MS,
+ *      FD_POLL_PHASE_MS, FD_PUSH=0, FD_APP_KEY (start from a wrong key, e.g. x, to watch the connector
+ *      fetch FanDuel's current keys from its bundle), FD_PIR_KEY, DK_STATE, DK_PROXY_URL, DK_REST_PROXY_URL,
+ *      DK_WS_PROXY_URL, DK_TOKEN_MODE, or BOOKS=fake for synthetic books; plus WATCH_SECONDS (exit after N
+ *      seconds), WATCH_SUMMARY_MS (default 30000), WATCH_QUIET=1.
  */
 import { monitorEventLoopDelay } from 'node:perf_hooks';
-import { DraftKingsConnector } from '../books/draftkings.js';
-import { FanDuelConnector } from '../books/fanduel.js';
-import type { BookConnector, Quote } from '../books/types.js';
+import type { BookConnector, BookId, MarketType, Quote, Side } from '../books/types.js';
+import { ConfigError, loadConfig, type Config } from '../server/config.js';
+import { BOOKS, createConnector } from '../server/registry.js';
+import { BOOK_IDS } from '../shared/domain.js';
 
 const env = process.env;
 const which = process.argv[2] ?? 'all';
 const quiet = env.WATCH_QUIET === '1';
 const num = (v: string | undefined) => (v === undefined || v === '' ? undefined : Number(v));
 
-const connectors: BookConnector[] = [];
-if (which === 'fanduel' || which === 'all') {
-  connectors.push(
-    new FanDuelConnector({
-      region: env.FD_REGION,
-      pollIntervalMs: num(env.FD_POLL_MS),
-      pollPhaseMs: num(env.FD_POLL_PHASE_MS),
-      push: env.FD_PUSH !== '0',
-      // Start from a wrong key (e.g. FD_APP_KEY=x) to watch the connector fetch FanDuel's current keys from its bundle.
-      appKey: env.FD_APP_KEY,
-      pirKey: env.FD_PIR_KEY,
-    }),
-  );
-}
-if (which === 'draftkings' || which === 'all') {
-  connectors.push(
-    new DraftKingsConnector({
-      state: env.DK_STATE,
-      proxyUrl: env.DK_PROXY_URL,
-      restProxyUrl: env.DK_REST_PROXY_URL,
-      wsProxyUrl: env.DK_WS_PROXY_URL,
-      tokenMode: env.DK_TOKEN_MODE === 'anonymous-jwt' ? 'anonymous-jwt' : undefined,
-    }),
-  );
-}
-if (!connectors.length) {
-  console.error('usage: watch.ts [fanduel|draftkings|all]');
+const books = BOOK_IDS.filter((b) => which === 'all' || b === which);
+if (!books.length) {
+  console.error(`usage: watch.ts [${[...BOOK_IDS, 'all'].join('|')}]`);
   process.exit(1);
 }
+let cfg: Config;
+try {
+  cfg = loadConfig(env);
+} catch (err) {
+  if (!(err instanceof ConfigError)) throw err;
+  console.error(`config error: ${err.message}`);
+  process.exit(2);
+}
+const connectors: BookConnector[] = books.map((b) => createConnector(b, cfg));
 
 const t0 = Date.now();
 const ts = () => `+${((Date.now() - t0) / 1000).toFixed(1).padStart(6)}s`;
-const short = { fanduel: 'FD', draftkings: 'DK' } as const;
+const short = (book: BookId) => BOOKS[book].short;
 const fmtOdds = (a: number) => (a > 0 ? `+${a}` : `${a}`);
 const fmtLine = (q: Quote) => (q.line === null ? '' : q.market === 'spread' && q.line > 0 ? `+${q.line}` : `${q.line}`);
 
@@ -61,10 +51,10 @@ const counts = new Map<string, number>();
 
 for (const c of connectors) {
   c.on('log', (m) => console.log(ts(), m));
-  c.on('status', (s) => console.log(ts(), `STATUS ${short[s.book]} → ${s.state}${s.detail ? ` (${s.detail})` : ''}`));
+  c.on('status', (s) => console.log(ts(), `STATUS ${short(s.book)} → ${s.state}${s.detail ? ` (${s.detail})` : ''}`));
   c.on('change', (ch) => {
     for (const q of ch.quotes) {
-      const key = `${short[q.book]} ${q.channel.padEnd(8)} ${q.live ? 'live' : 'pre '}`;
+      const key = `${short(q.book)} ${q.channel.padEnd(8)} ${q.live ? 'live' : 'pre '}`;
       counts.set(key, (counts.get(key) ?? 0) + 1);
       if (q.bookTime !== null) {
         const list = lags.get(key) ?? [];
@@ -74,19 +64,19 @@ for (const c of connectors) {
     }
     if (quiet) return;
     if (ch.quotes.length > 12) {
-      console.log(ts(), `${short[ch.book]} ${ch.quotes.length} quotes via ${ch.quotes[0]!.channel}, ${ch.games.length} games`);
+      console.log(ts(), `${short(ch.book)} ${ch.quotes.length} quotes via ${ch.quotes[0]!.channel}, ${ch.games.length} games`);
     } else {
       for (const q of ch.quotes) {
         const lag = q.bookTime !== null ? ` lag ${q.receivedAt - q.bookTime}ms` : '';
         console.log(
           ts(),
-          `${short[q.book]} ${q.gameKey.padEnd(20)} ${q.market.padEnd(9)} ${q.side.padEnd(5)} ${fmtLine(q).padStart(6)} ${fmtOdds(q.american).padStart(6)}` +
+          `${short(q.book)} ${q.gameKey.padEnd(20)} ${q.market.padEnd(9)} ${q.side.padEnd(5)} ${fmtLine(q).padStart(6)} ${fmtOdds(q.american).padStart(6)}` +
             `${q.suspended ? ' SUSP' : ''}${q.live ? ' LIVE' : ''}  [${q.channel}${lag}]`,
         );
       }
     }
-    for (const r of ch.removedQuotes) console.log(ts(), `${short[ch.book]} removed ${r.gameKey} ${r.market} ${r.side}`);
-    for (const g of ch.removedGames) console.log(ts(), `${short[ch.book]} removed game ${g}`);
+    for (const r of ch.removedQuotes) console.log(ts(), `${short(ch.book)} removed ${r.gameKey} ${r.market} ${r.side}`);
+    for (const g of ch.removedGames) console.log(ts(), `${short(ch.book)} removed game ${g}`);
   });
 }
 
@@ -117,7 +107,7 @@ function summary(): void {
   for (const c of connectors) {
     const snap = c.snapshot();
     const age = snap.status.lastDataAt ? `${((Date.now() - snap.status.lastDataAt) / 1000).toFixed(1)}s ago` : 'never';
-    console.log(`${short[c.book]}: ${snap.status.state}${snap.status.detail ? ` (${snap.status.detail})` : ''} · ${snap.games.length} games · ${snap.quotes.length} quotes · last data ${age}`);
+    console.log(`${short(c.book)}: ${snap.status.state}${snap.status.detail ? ` (${snap.status.detail})` : ''} · ${snap.games.length} games · ${snap.quotes.length} quotes · last data ${age}`);
   }
   for (const [key, n] of [...counts].sort()) {
     const l = lags.get(key);
@@ -128,7 +118,7 @@ function summary(): void {
   console.log('');
 }
 
-/** Side-by-side main lines, to eyeball that both books' games and sides line up. */
+/** Side-by-side main lines (one cell per book), to eyeball that every book's games and sides line up. */
 function printBoard(): void {
   const rows = new Map<string, Map<string, Quote>>();
   for (const c of connectors) {
@@ -138,14 +128,18 @@ function printBoard(): void {
       rows.set(q.gameKey, row);
     }
   }
+  const books = connectors.map((c) => c.book);
+  const codes = books.map(short).join(' / ');
+  const [mlWidth, spreadWidth] = [9 * books.length + 1, 13 * books.length + 1];
   const cell = (q?: Quote) => (q ? `${fmtLine(q)} ${fmtOdds(q.american)}`.trim() + (q.suspended ? '*' : '') : '—');
-  console.log(`  ${'game'.padEnd(20)} ${'side'.padEnd(5)} | ${'ML  DK / FD'.padEnd(19)} | ${'spread  DK / FD'.padEnd(27)} | total  DK / FD`);
+  const cells = (row: Map<string, Quote>, market: MarketType, side: Side) => books.map((b) => cell(row.get(`${b}|${market}|${side}`))).join(' / ');
+  console.log(`  ${'game'.padEnd(20)} ${'side'.padEnd(5)} | ${`ML  ${codes}`.padEnd(mlWidth)} | ${`spread  ${codes}`.padEnd(spreadWidth)} | total  ${codes}`);
   for (const [game, row] of [...rows].sort()) {
     for (const [side, tside] of [['away', 'over'], ['home', 'under']] as const) {
-      const ml = `${cell(row.get(`draftkings|moneyline|${side}`))} / ${cell(row.get(`fanduel|moneyline|${side}`))}`;
-      const sp = `${cell(row.get(`draftkings|spread|${side}`))} / ${cell(row.get(`fanduel|spread|${side}`))}`;
-      const to = `${tside[0]} ${cell(row.get(`draftkings|total|${tside}`))} / ${cell(row.get(`fanduel|total|${tside}`))}`;
-      console.log(`  ${(side === 'away' ? game : '').padEnd(20)} ${side.padEnd(5)} | ${ml.padEnd(19)} | ${sp.padEnd(27)} | ${to}`);
+      const ml = cells(row, 'moneyline', side);
+      const sp = cells(row, 'spread', side);
+      const to = `${tside[0]} ${cells(row, 'total', tside)}`;
+      console.log(`  ${(side === 'away' ? game : '').padEnd(20)} ${side.padEnd(5)} | ${ml.padEnd(mlWidth)} | ${sp.padEnd(spreadWidth)} | ${to}`);
     }
   }
 }

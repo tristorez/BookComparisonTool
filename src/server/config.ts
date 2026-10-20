@@ -1,11 +1,12 @@
 /**
- * Environment → typed config, validated at boot (fail fast with a clear message). Env names for the
- * connectors match `npm run watch` (src/scripts/watch.ts).
+ * Environment → typed config, validated at boot (fail fast with a clear message). `npm run watch`
+ * (src/scripts/watch.ts) builds its connectors from the same settings.
  */
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { BookId } from '../shared/domain.js';
+import { BOOK_IDS, type BookId } from '../shared/domain.js';
 import type { FakeMode } from './fake.js';
+import { BOOKS } from './registry.js';
 
 export interface Endpoint {
   host: string;
@@ -21,8 +22,9 @@ export interface Config {
   books: BookId[];
   /** Synthetic books for offline dev, tests and load tests (`BOOKS=fake`). */
   fake: { seed: number; ratePerSec: number; modes: Partial<Record<BookId, FakeMode>> } | null;
-  dk: { state: string; proxyUrl?: string; restProxyUrl?: string; wsProxyUrl?: string };
-  fd: { region: string; push: boolean; pollIntervalMs: number; pollPhaseMs: number; proxyUrl?: string };
+  // Each book's own settings (its connector's options), from env vars prefixed with its short code.
+  dk: { state: string; proxyUrl?: string; restProxyUrl?: string; wsProxyUrl?: string; tokenMode?: DkTokenMode };
+  fd: { region: string; push: boolean; pollIntervalMs: number; pollPhaseMs: number; proxyUrl?: string; appKey?: string; pirKey?: string };
   /** Board: where Box B connects (private address only). */
   feedListen: Endpoint | null;
   /** Feed: Box A's private feed-link address. */
@@ -36,8 +38,10 @@ export interface Config {
   logLevel: string;
 }
 
-const ALL_BOOKS: BookId[] = ['draftkings', 'fanduel'];
+type DkTokenMode = 'default' | 'anonymous-jwt';
+
 const FAKE_MODES: readonly FakeMode[] = ['normal', 'fail', 'freeze', 'garbage', 'massRemove'];
+const DK_TOKEN_MODES: readonly DkTokenMode[] = ['default', 'anonymous-jwt'];
 
 export class ConfigError extends Error {}
 
@@ -72,17 +76,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const role = (env.ROLE ?? 'board') as Config['role'];
   if (role !== 'board' && role !== 'feed') throw new ConfigError(`ROLE must be "board" or "feed", got "${env.ROLE}"`);
 
-  const booksRaw = (env.BOOKS ?? ALL_BOOKS.join(',')).trim();
+  const booksRaw = (env.BOOKS ?? BOOK_IDS.join(',')).trim();
   const fakeAll = booksRaw === 'fake';
-  const books = fakeAll ? ALL_BOOKS : (booksRaw.split(',').map((b) => b.trim()) as BookId[]);
-  for (const b of books) if (!ALL_BOOKS.includes(b)) throw new ConfigError(`BOOKS has unknown book "${b}" (known: ${ALL_BOOKS.join(', ')}, or "fake")`);
+  const books = fakeAll ? [...BOOK_IDS] : (booksRaw.split(',').map((b) => b.trim()) as BookId[]);
+  for (const b of books) if (!BOOK_IDS.includes(b)) throw new ConfigError(`BOOKS has unknown book "${b}" (known: ${BOOK_IDS.join(', ')}, or "fake")`);
 
+  // Settings every book has, named by its short code: FAKE_MODE_DK, STALE_AFTER_FD_MS.
   const modes: Partial<Record<BookId, FakeMode>> = {};
-  for (const b of ALL_BOOKS) {
-    const m = env[`FAKE_MODE_${b === 'draftkings' ? 'DK' : 'FD'}`] as FakeMode | undefined;
-    if (m && !FAKE_MODES.includes(m)) throw new ConfigError(`FAKE_MODE_* must be one of ${FAKE_MODES.join(', ')}`);
+  const staleAfterMs: Partial<Record<BookId, number>> = {};
+  for (const b of BOOK_IDS) {
+    const { short, staleAfterMs: fallback } = BOOKS[b];
+    const m = env[`FAKE_MODE_${short}`] as FakeMode | undefined;
+    if (m && !FAKE_MODES.includes(m)) throw new ConfigError(`FAKE_MODE_${short} must be one of ${FAKE_MODES.join(', ')}`);
     if (m) modes[b] = m;
+    if (env[`STALE_AFTER_${short}_MS`]) staleAfterMs[b] = int(env, `STALE_AFTER_${short}_MS`, fallback, 1);
   }
+  const dkTokenMode = opt(env.DK_TOKEN_MODE) as DkTokenMode | undefined;
+  if (dkTokenMode && !DK_TOKEN_MODES.includes(dkTokenMode)) throw new ConfigError(`DK_TOKEN_MODE must be one of ${DK_TOKEN_MODES.join(', ')}`);
 
   const feedId = env.FEED_ID ?? (role === 'board' ? 'A' : 'B');
   if (!/^[A-Za-z0-9_-]{1,16}$/.test(feedId)) throw new ConfigError(`FEED_ID must be 1-16 letters/digits, got "${feedId}"`);
@@ -103,22 +113,28 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     books,
     // FAKE_RATE ≥ 1: at 0 the fake book's tick would be Infinity ms, which setTimeout turns into 1 ms (a busy loop).
     fake: fakeAll ? { seed: int(env, 'FAKE_SEED', 7), ratePerSec: int(env, 'FAKE_RATE', 4, 1), modes } : null,
-    dk: { state: env.DK_STATE ?? 'nj', proxyUrl: opt(env.DK_PROXY_URL), restProxyUrl: opt(env.DK_REST_PROXY_URL), wsProxyUrl: opt(env.DK_WS_PROXY_URL) },
+    dk: {
+      state: env.DK_STATE ?? 'nj',
+      proxyUrl: opt(env.DK_PROXY_URL),
+      restProxyUrl: opt(env.DK_REST_PROXY_URL),
+      wsProxyUrl: opt(env.DK_WS_PROXY_URL),
+      tokenMode: dkTokenMode,
+    },
     fd: {
       region: env.FD_REGION ?? 'nj',
       push: env.FD_PUSH !== '0',
       pollIntervalMs: int(env, 'FD_POLL_MS', 1_000),
       pollPhaseMs: int(env, 'FD_POLL_PHASE_MS', feedId === 'A' ? 0 : 500),
       proxyUrl: opt(env.FD_PROXY_URL),
+      // Starting keys; a wrong one (FD_APP_KEY=x) shows the connector re-reading FD's live bundle.
+      appKey: opt(env.FD_APP_KEY),
+      pirKey: opt(env.FD_PIR_KEY),
     },
     feedListen,
     feedUpstream,
     feedToken,
     staleGraceMs: int(env, 'STALE_GRACE_MS', 5_000),
-    staleAfterMs: {
-      ...(env.STALE_AFTER_DK_MS ? { draftkings: int(env, 'STALE_AFTER_DK_MS', 15_000, 1) } : {}),
-      ...(env.STALE_AFTER_FD_MS ? { fanduel: int(env, 'STALE_AFTER_FD_MS', 5_000, 1) } : {}),
-    },
+    staleAfterMs,
     chaos,
     // fileURLToPath, not URL.pathname: the latter percent-encodes spaces in the install path.
     webDir: env.WEB_DIR ?? fileURLToPath(new URL('../web/', import.meta.url)),

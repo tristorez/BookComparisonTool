@@ -24,4 +24,3 @@ export function createPushTable(rows: readonly { k: number; p: number }[], tailR
 }
 
 export const NFL_PUSH_TABLE: PushTable = createPushTable(data.table);
-export const NFL_PUSH_TABLE_SOURCE = { source: data.source, url: data.url, seasons: data.seasons, games: data.games, method: data.method };

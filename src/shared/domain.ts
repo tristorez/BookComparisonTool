@@ -22,16 +22,3 @@ export const MARKET_SIDES: Readonly<Record<MarketType, readonly [Side, Side]>> =
   spread: ['away', 'home'],
   total: ['over', 'under'],
 };
-
-export function oppositeSide(side: Side): Side {
-  switch (side) {
-    case 'home':
-      return 'away';
-    case 'away':
-      return 'home';
-    case 'over':
-      return 'under';
-    case 'under':
-      return 'over';
-  }
-}

@@ -147,12 +147,8 @@ export class MarketMerge {
   shown = '';
   private lastPushBookTime = 0;
 
-  /**
-   * Offer one observed market state; returns true if it should be shown. `_at` and `_pushLive` are unused
-   * since the two guards above were removed; they stay in the signature so the replay harness can run
-   * alternative strategies through the same call.
-   */
-  offer(channel: Channel, sig: string, _at: number, bookTime: number | null, _pushLive: boolean): boolean {
+  /** Offer one observed market state; returns true if it should be shown. */
+  offer(channel: Channel, sig: string, bookTime: number | null): boolean {
     if (channel === 'push' && bookTime !== null) {
       if (bookTime < this.lastPushBookTime) return false; // out of order
       this.lastPushBookTime = bookTime;
@@ -875,7 +871,7 @@ export class FanDuelConnector extends BookConnector {
       });
     }
 
-    const accepted = m.merge.offer(channel, signatureOf(update, inPlay), receivedAt, bookTime, this.pushLive);
+    const accepted = m.merge.offer(channel, signatureOf(update, inPlay), bookTime);
     this.emitSamples(quotes, accepted);
     if (!accepted) return;
 

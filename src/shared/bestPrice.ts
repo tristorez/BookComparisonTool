@@ -196,7 +196,6 @@ export function rankOffers(offers: readonly Offer[], ctx: { market: MarketType; 
     .filter(({ s }) => compareKeys(s, scores[top]!) !== 0)
     .sort((a, b) => compareKeys(b.s, a.s))
     .map(({ o }) => o);
-  const best = winners[0]!;
   const exact = regime === 'payout';
   const rule: BestRule = regime === 'model' ? 'R3' : regime === 'line' ? 'R4' : winners.length > 1 ? 'R5' : ctx.market === 'moneyline' ? 'R1' : 'R2';
 

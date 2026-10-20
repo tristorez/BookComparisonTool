@@ -118,7 +118,7 @@ export function replay(path = DEFAULT_FIXTURE): Replay {
     evaluate('market', 'any change', market, endAt, changesOnly),
     evaluate('market', 'MarketMerge (connector)', market, endAt, () => {
       const mm = new MarketMerge();
-      return { offer: (o) => mm.offer(o.channel, o.sig, o.t, o.bookTime, true) };
+      return { offer: (o) => mm.offer(o.channel, o.sig, o.bookTime) };
     }),
     evaluate('quote', 'any change', quote, endAt, changesOnly),
     evaluate('quote', 'QuoteMerge (board)', quote, endAt, () => {

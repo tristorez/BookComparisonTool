@@ -13,7 +13,7 @@
  */
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { connect as h2connect } from 'node:http2';
-import type { Delta, Snapshot, TimeResponse } from '../src/shared/wire.js';
+import type { Delta, TimeResponse } from '../src/shared/wire.js';
 
 const args = new Map<string, string>();
 for (let i = 2; i < process.argv.length; i++) {

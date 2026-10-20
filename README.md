@@ -124,8 +124,8 @@ gateway → internet → our feed box → merge and emit → internet → browse
   the second box buys.
 - **Server → browser:** delta emitted to browser receive. **Paint:** receive to the next animation frame.
   **Book → browser:** browser receive minus the book's timestamp, the end-to-end number.
-- FD's timestamps are whole seconds, so FD figures are upper bounds. Definitions and clock handling: see
-  `LatencyStats.txt`.
+- FD's timestamps are whole seconds, so FD figures are upper bounds. Clock handling is in "How we measure"
+  above.
 
 **Game night: WAS @ SF, 2026-10-19 (8:00 pm ET, ~86 minutes live).** Book → our server, from the board on AWS
 (every frame, p50 / p90 / p99, ms). FD's whole-second timestamps make its figures upper bounds.
@@ -161,6 +161,9 @@ in `docs/latency/`.
 - No batching in the connectors; the server coalesces only what changes in one event-loop turn into one
   delta (~550 bytes for a one-market move; the full 15-game snapshot is ~58 KB).
 - Host in `us-east-2`, next to FD's push origin.
+- **Tried and rejected:** a different DraftKings subscription (single-event, no market filter, live-only) to reach a
+  faster path. Run side by side on a live game (`scripts/dk-variants.ts`, 128 price states), none beat the
+  subscription we use; identical sockets differ from each other by ~70 ms, more than any variant did.
 
 ## 5. What we hit with each book, and what we'd do next
 

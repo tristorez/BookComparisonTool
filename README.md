@@ -149,8 +149,8 @@ gateway → internet → our feed box → merge and emit → internet → browse
 - **Health:** 0 aggregator errors, 0 invalid quotes, 0 dropped clients, 0 watchdog restarts; 81
   older-than-current updates correctly rejected.
 
-Limits: one game, ~86 minutes, measured from the St. Louis dev server (not a Canadian vantage). Raw data is
-in `docs/latency/`.
+Limits: one game, ~86 minutes. The book → server figures come from the board on AWS; the browser-side figures come
+from clients on the St. Louis dev server (not a Canadian vantage). Raw data is in `docs/latency/`.
 
 **What we did to cut latency**
 - Push wherever a book has it: the DK socket and FD's PIR push.
@@ -169,7 +169,7 @@ in `docs/latency/`.
 
 | | DraftKings | FanDuel |
 |---|---|---|
-| **Geo** | Not geofenced by state or country: AWS Ohio, Ashburn and Montréal all got byte-identical answers. We cannot choose a region: every state/province site name (`dkusnj`, `dkcaon`, `dkcaab`, even a made-up `zz`) returned the same bytes, so which jurisdiction its prices represent is unverified. | Region is chosen by hostname (`sbapi.<st>.sportsbook.fanduel.com`; Canada on `.ca`). 25 US states plus Ontario and Alberta answer; the other 26 states and the other provinces have no host. A Missouri IP reads NJ prices. Same keys work everywhere. |
+| **Geo** | Not geofenced by state or country: AWS Ohio, Ashburn and Montréal all got the same events and prices. We cannot choose a region: the site names we tried (`dkusnj`, `dkcaon`, `dkcaab`, even a made-up `zz`) all returned the same events and prices, so which jurisdiction they represent is unverified. | Region is chosen by hostname (`sbapi.<st>.sportsbook.fanduel.com`; Canada on `.ca`). 25 US states plus Ontario and Alberta answer; the other 26 states and the other provinces have no host. A Missouri IP reads NJ prices. Same keys work everywhere. |
 | **Bot protection** | Akamai on every host. It blocked our Contabo dev server by IP/ASN, and it scores the HTTP client (`fetch` gets 200 where `https.request` gets 403 from the same IP). Solved with AWS `us-east-2` IPs, one HTTP client, and a probe before any host goes live. | PerimeterX on the HTML site only; the API hosts answer normally. The WAF rejects requests with no User-Agent. |
 | **Rate limits** | None hit. We run one socket and one REST read per minute per box. A stepped test from the t3.micro (8 s per step) ran the REST snapshot at 1, 2, 5 and 10 req/s: 144 requests, all 200, p50 105–139 ms. | None hit. We run one SMP poll per second, one PIR socket and a board refresh every 30 s per box. The same test ran SMP prices (70 markets) at 2, 5, 10 and 20 req/s: 296 requests, all 200, p50 15–27 ms. The board page ran at 1, 2 and 4 req/s: 56 requests, all 200. |
 | **Credentials** | `"default-token"`, with a JWT fallback. | Public keys, re-read from the live bundle on rotation. |
@@ -179,7 +179,7 @@ in `docs/latency/`.
   in 11 other states, Ontario and Alberta, and on the live price endpoint for PA, NY, IL and Ontario.
   Game props matched too. What differs is market-id namespaces and a few futures (103 markets in NJ and
   Ontario, 101 in PA/OH, 96 in NY/VA). An Ontario column would show the same prices, so we ship NJ.
-- **Server location didn't change answers.** Canada, US-east-1 and Ohio got the same bytes from both books.
+- **Server location didn't change answers.** Canada, US-east-1 and Ohio got the same prices from both books.
   Reports that these APIs reject Canadian IPs did not reproduce from an AWS Canada address; we did not
   test residential or other IP ranges.
 - **What blocks us is IP reputation, not location.** DraftKings' Akamai refused our St. Louis dev server

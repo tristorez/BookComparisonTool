@@ -65,7 +65,7 @@ per second per box.
 
 | | DraftKings | FanDuel |
 |---|---|---|
-| **Geo** | Not geofenced: AWS Ohio, Ashburn and Montréal got identical answers. Every state name we sent (even a made-up one) returned the same bytes, so we can't say which region its prices represent. | Region is chosen by hostname; 25 US states plus Ontario and Alberta answer. Game lines were identical to NJ in every region we compared, so we ship NJ. |
+| **Geo** | Not geofenced: AWS Ohio, Ashburn and Montréal got the same events and prices. Every site name we tried (even a made-up one) returned the same events and prices, so we can't say which region they represent. | Region is chosen by hostname; 25 US states plus Ontario and Alberta answer. Game lines were identical to NJ in every region we compared, so we ship NJ. |
 | **Bot protection** | Akamai. It blocked our dev server by IP reputation and scores the HTTP client too (`fetch` gets 200 where `https.request` gets 403 from the same IP). We use AWS IPs, one HTTP client, and a probe (`scripts/probe-egress.mjs`) before any host goes live. | PerimeterX on the HTML site only; the API hosts answer normally. Requests with no User-Agent are rejected. |
 | **Rate limits** | None hit. A stepped test from the t3.micro went up to 10 req/s on the REST snapshot with no refusals. | None hit. The same test went up to 20 req/s on SMP prices (70 markets) with no refusals. |
 

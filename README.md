@@ -143,14 +143,25 @@ gateway → internet → our feed box → merge and emit → internet → browse
   a large share of changes, which is why both channels run.
 - **Two feeds racing:** the second copy of a price trails the first by p50 32 ms (DK) and 330 ms (FD); the
   box-to-box link adds p50 0 ms.
-- **Backend → browser (live, indicative):** server → browser p50 ~24 ms, paint 1–9 ms. Only 3 clients were
-  connected, so live browser-side samples are few (n = 4–5 per book). DK book → browser live was ≈1.8–2.0 s
-  (n = 4), of which ~1.1 s is DK's own delay.
+- **End to end, book → client (full game, 220 min, St. Louis client on the public URL).** Every delta the
+  stream delivered, timed against the book's own change time. Ranges span the two feed boxes (which one saw
+  the change first); FD figures are upper bounds.
+
+  | Book | Phase | n | p50 | p90 | p99 |
+  |---|---|---|---|---|---|
+  | DraftKings | pregame | 48 | 90–113 ms | 0.2–0.8 s | 0.2–0.8 s |
+  | DraftKings | **live** | 5,025 | **485–691 ms** | 1.6–1.8 s | 3.4–4.6 s |
+  | FanDuel (push) | **live** | 372 | **539–950 ms** | 1.0 s | 1.1–1.4 s |
+
+  Our share of that is small: first receipt on a feed box → client is p50 27–30 ms (p99 ≤ 70 ms), of
+  which board processing is ≤ 2 ms; paint adds 1–10 ms. DK's own engine → publish step is p50 476–555 ms
+  live, most of DK's figure. FD pregame had too few pushed changes in the window to report (n = 2).
+  Report: `docs/latency/2026-10-20-mnf-was-sf-stlouis.md`.
 - **Health:** 0 aggregator errors, 0 invalid quotes, 0 dropped clients, 0 watchdog restarts; 81
   older-than-current updates correctly rejected.
 
-Limits: one game, ~86 minutes. The book → server figures come from the board on AWS; the browser-side figures come
-from clients on the St. Louis dev server (not a Canadian vantage). Raw data is in `docs/latency/`.
+Limits: one game. The book → server table covers its first ~86 minutes, from the board on AWS; the end-to-end
+figures come from one client on the St. Louis dev server (not a Canadian vantage). Raw data is in `docs/latency/`.
 
 **What we did to cut latency**
 - Push wherever a book has it: the DK socket and FD's PIR push.

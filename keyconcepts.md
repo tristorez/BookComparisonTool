@@ -17,13 +17,14 @@ frame, from the board on AWS. FanDuel's timestamps are whole seconds, so its fig
 | FanDuel (push) | pregame | 1,042 ms | 1.5 s | 1.6 s |
 | FanDuel (push) | live | 968 ms | 1.4 s | 1.8 s |
 
-- **Backend → browser:** server → browser p50 ~24 ms live, paint 1–9 ms. Only three clients were connected, so
-  these live browser-side samples are few (n = 4–5 per book); read them as indicative.
-- **Book → browser, live:** DraftKings ≈1.8–2.0 s (n = 4), of which ~1.1 s is DraftKings' own delay.
+- **Book → client, end to end (full game, 220 min, through the public URL):** DraftKings live p50 485–691 ms,
+  p99 3.4–4.6 s (n = 5,025); FanDuel live p50 539–950 ms, p99 1.1–1.4 s (n = 372, upper bounds). Ranges
+  span the two feed boxes.
+- **Our share:** feed box → client p50 27–30 ms (p99 ≤ 70 ms), board processing ≤ 2 ms, paint 1–10 ms.
 - **Where DraftKings' time goes:** live, engine → publish is p50 1,097 ms (inside DK), gateway → us is
   19 ms, and our processing is ~1 ms. The wait is DK's pricing pipeline, not our network or code.
-- **Limits:** one game. The book → backend numbers come from the board on AWS; the browser-side numbers
-  come from clients on the St. Louis dev server, not a Canadian vantage point.
+- **Limits:** one game. The book → backend numbers come from the board on AWS; the end-to-end numbers
+  come from one client on the St. Louis dev server, not a Canadian vantage point.
 
 **What we did to bring it down, and why**
 - **Get data out of each book the fastest way the book offers.** DraftKings: its own WebSocket delta feed.

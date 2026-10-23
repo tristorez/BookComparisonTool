@@ -52,9 +52,10 @@ export const PriceCell = memo(function PriceCell(props: PriceCellProps) {
 
 /**
  * The move, but only if it happened after this cell mounted. Mounting (first load, a snapshot, a view
- * switch, a game moving between groups) therefore never flashes or shows a previous price.
+ * switch, a game moving between groups, a props tab opened again) therefore never flashes or shows a
+ * previous price.
  */
-function useFreshMove(move: Move | undefined): Move | undefined {
+export function useFreshMove<M extends { n: number }>(move: M | undefined): M | undefined {
   const baseline = useRef(move?.n ?? 0);
   return move !== undefined && move.n > baseline.current ? move : undefined;
 }
@@ -76,10 +77,7 @@ function BestCell({ game, market, side, gameLive, gameSuspect, align = 'center',
       {pick !== undefined ? (
         <BestPick pick={pick} move={fresh} books={books} game={game} market={market} side={side} gameLive={gameLive} gameSuspect={gameSuspect} align={align} />
       ) : (
-        <span className="py-0.5 text-sm text-faint" data-none>
-          <span aria-hidden="true">—</span>
-          <span className="sr-only">No price</span>
-        </span>
+        <NoPrice />
       )}
       {others.map((b) => (
         <OtherQuote key={b.id} meta={b} game={game} market={market} side={side} gameLive={gameLive} gameSuspect={gameSuspect} align={align} />
@@ -213,10 +211,7 @@ function BookCell({ book, game, market, side, gameLive, gameSuspect, align = 'ce
   if (quote === undefined) {
     return (
       <div className="flex flex-col items-center text-center" data-cell={book}>
-        <span className="py-0.5 text-sm text-faint" data-none>
-          <span aria-hidden="true">—</span>
-          <span className="sr-only">No price</span>
-        </span>
+        <NoPrice />
       </div>
     );
   }
@@ -234,17 +229,37 @@ function BookCell({ book, game, market, side, gameLive, gameSuspect, align = 'ce
         ) : (
           price
         )}
-        {holdsBest && (
-          <span role="img" aria-label="Best price" title="Best price across books" className="text-xs leading-none text-accent">
-            ★
-          </span>
-        )}
+        {holdsBest && <BestStar />}
       </span>
     </div>
   );
 }
 
-// ---- shared pieces ---------------------------------------------------------------------------------
+// ---- shared pieces (the game page's player props render with these too) -----------------------------
+
+/** A side with no price: a dash, and words for screen readers. */
+export function NoPrice({ label = 'No price' }: { label?: string }) {
+  return (
+    <span className="py-0.5 text-sm text-faint" data-none>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+/** Marks the book holding the best price; `byLine` when the lines differed and the better line won. */
+export function BestStar({ byLine = false }: { byLine?: boolean }) {
+  return (
+    <span
+      role="img"
+      aria-label={byLine ? 'Best price, on a better line' : 'Best price'}
+      title={byLine ? `Best price across books. ${METHOD_TIPS.byLine}` : 'Best price across books'}
+      className="text-xs leading-none text-accent"
+    >
+      ★
+    </span>
+  );
+}
 
 interface PriceProps {
   market: MarketType;
@@ -256,7 +271,7 @@ interface PriceProps {
   dim: boolean;
 }
 
-function Price({ market, side, line, american, move, dim }: PriceProps) {
+export function Price({ market, side, line, american, move, dim }: PriceProps) {
   const showPrev = useWithin(move?.at, PREV_PRICE_MS);
   const p = formatPrice(market, side, line, american);
   const flash = move === undefined ? '' : move.dir === 'up' ? 'flash-up' : 'flash-down';
@@ -292,7 +307,7 @@ function prevText(market: MarketType, side: Side, line: number | null, move: Mov
   return prevLine === null ? odds : `${prevLine} ${odds}`;
 }
 
-function IneligibleQuote({ inel, align, compact = false, children }: { inel: Ineligibility; align: TipAlign; compact?: boolean; children: ReactNode }) {
+export function IneligibleQuote({ inel, align, compact = false, children }: { inel: Ineligibility; align: TipAlign; compact?: boolean; children: ReactNode }) {
   return (
     <Tip align={align} tip={ineligibleTooltip(inel)}>
       <span

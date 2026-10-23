@@ -647,6 +647,17 @@ export class Board extends EventEmitter<{ delta: [Delta] }> {
     return { ...views[0]!, live: views.some((g) => g.live) };
   }
 
+  /** Each book's own view of a game on the board (its event id and teams, for on-demand reads such as props); null when the game isn't on it. */
+  bookGames(gk: string): Partial<Record<BookId, BookGame>> | null {
+    if (!this.gamesSent.has(gk)) return null;
+    const games: Partial<Record<BookId, BookGame>> = {};
+    for (const spec of this.books) {
+      const g = this.bookGame(spec.id, gk);
+      if (g) games[spec.id] = g;
+    }
+    return games;
+  }
+
   /** The game as clients see it, combined across books (earliest kickoff, live if any book says so); null once no book lists it. */
   private wireGame(gk: string): WireGame | null {
     const views = this.books.map((b) => this.bookGame(b.id, gk)).filter((g): g is BookGame => !!g);

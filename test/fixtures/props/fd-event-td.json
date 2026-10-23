@@ -1,0 +1,624 @@
+{
+ "attachments": {
+  "events": {
+   "36189006": {
+    "competitionId": 12282733,
+    "inPlay": false,
+    "eventId": 36189006,
+    "key": "EVENT:36189006",
+    "name": "Kansas City Chiefs @ Seattle Seahawks",
+    "eventTypeId": 6423,
+    "countryCode": "GB",
+    "timezone": "GMT",
+    "openDate": "2026-10-26T00:21:00.000Z",
+    "videoAvailable": false,
+    "primaryMarketId": "734.191503700"
+   }
+  },
+  "markets": {
+   "734.193065098": {
+    "marketId": "734.193065098",
+    "eventTypeId": 6423,
+    "competitionId": 12282733,
+    "eventId": 36189006,
+    "marketName": "Either Player - Anytime Touchdown Scorer",
+    "marketTime": "2026-10-26T00:21:00.000Z",
+    "marketType": "EITHER_PLAYER_-_ANY_TIME_TOUCHDOWN_SCORER",
+    "bspMarket": false,
+    "sgmMarket": true,
+    "inPlay": false,
+    "numberOfRunners": 10,
+    "numberOfActiveRunners": 10,
+    "numberOfWinners": 1,
+    "sortPriority": 6955,
+    "bettingType": "ODDS",
+    "marketStatus": "OPEN",
+    "runners": [
+     {
+      "selectionId": 104154771,
+      "handicap": 0,
+      "runnerName": "Jaxon Smith-Njigba or Kenneth Walker III",
+      "sortPriority": 1,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": -290,
+        "americanOddsInt": -290
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 1.344827586206897
+        },
+        "fractionalOdds": {
+         "numerator": 10,
+         "denominator": 29
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": -300,
+         "americanOddsInt": -300
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 1.333333333333333
+         },
+         "fractionalOdds": {
+          "numerator": 10,
+          "denominator": 30
+         }
+        }
+       }
+      ]
+     },
+     {
+      "selectionId": 102721927,
+      "handicap": 0,
+      "runnerName": "Travis Kelce or Kenneth Walker III",
+      "sortPriority": 2,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": -240,
+        "americanOddsInt": -240
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 1.416666666666667
+        },
+        "fractionalOdds": {
+         "numerator": 10,
+         "denominator": 24
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": -250,
+         "americanOddsInt": -250
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 1.4
+         },
+         "fractionalOdds": {
+          "numerator": 10,
+          "denominator": 25
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "canTurnInPlay": false,
+    "associatedMarkets": [
+     {
+      "eventId": 36189006,
+      "eventTypeId": 6423,
+      "externalMarketId": "42.618419803"
+     }
+    ],
+    "isSuperSubEnabled": false,
+    "isBetProtectEligible": false,
+    "shouldDisplayStatsInRunner": true,
+    "eachwayAvailable": false,
+    "legTypes": [
+     "SIMPLE_SELECTION"
+    ]
+   },
+   "734.192727342": {
+    "marketId": "734.192727342",
+    "eventTypeId": 6423,
+    "competitionId": 12282733,
+    "eventId": 36189006,
+    "marketName": "1st Touchdown Scorer",
+    "marketTime": "2026-10-26T00:21:00.000Z",
+    "marketType": "X_TOUCHDOWN_SCORER_QB",
+    "bspMarket": false,
+    "sgmMarket": true,
+    "inPlay": false,
+    "numberOfRunners": 27,
+    "numberOfActiveRunners": 27,
+    "numberOfWinners": 1,
+    "sortPriority": 1210,
+    "bettingType": "ODDS",
+    "marketStatus": "OPEN",
+    "runners": [
+     {
+      "selectionId": 40845134,
+      "handicap": 0,
+      "runnerName": "Kenneth Walker III",
+      "sortPriority": 1,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "logo": "https://assets.sportsbook.fanduel.com/images/team/nfl/kansas_city_chiefs_jersey.png",
+      "secondaryLogo": "https://assets.sportsbook.fanduel.com/images/team/nfl/kansas_city_chiefs.png",
+      "isPlayerSelection": true,
+      "jersey": {
+       "jerseyNumber": "9",
+       "jerseyBg": "dark"
+      },
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": 470,
+        "americanOddsInt": 470
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 5.7
+        },
+        "fractionalOdds": {
+         "numerator": 47,
+         "denominator": 10
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": 460,
+         "americanOddsInt": 460
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 5.6
+         },
+         "fractionalOdds": {
+          "numerator": 46,
+          "denominator": 10
+         }
+        }
+       }
+      ]
+     },
+     {
+      "selectionId": 26919603,
+      "handicap": 0,
+      "runnerName": "Zach Charbonnet",
+      "sortPriority": 2,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "logo": "https://assets.sportsbook.fanduel.com/images/team/nfl/seattle_seahawks_jersey.png",
+      "secondaryLogo": "https://assets.sportsbook.fanduel.com/images/team/nfl/seattle_seahawks.png",
+      "isPlayerSelection": true,
+      "jersey": {
+       "jerseyNumber": "26",
+       "jerseyBg": "dark"
+      },
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": 600,
+        "americanOddsInt": 600
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 7
+        },
+        "fractionalOdds": {
+         "numerator": 60,
+         "denominator": 10
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": 650,
+         "americanOddsInt": 650
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 7.5
+         },
+         "fractionalOdds": {
+          "numerator": 65,
+          "denominator": 10
+         }
+        }
+       }
+      ]
+     },
+     {
+      "selectionId": 36914881,
+      "handicap": 0,
+      "runnerName": "Jaxon Smith-Njigba",
+      "sortPriority": 3,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "logo": "https://assets.sportsbook.fanduel.com/images/team/nfl/seattle_seahawks_jersey.png",
+      "secondaryLogo": "https://assets.sportsbook.fanduel.com/images/team/nfl/seattle_seahawks.png",
+      "isPlayerSelection": true,
+      "jersey": {
+       "jerseyNumber": "11",
+       "jerseyBg": "dark"
+      },
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": 650,
+        "americanOddsInt": 650
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 7.5
+        },
+        "fractionalOdds": {
+         "numerator": 65,
+         "denominator": 10
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": 700,
+         "americanOddsInt": 700
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 8
+         },
+         "fractionalOdds": {
+          "numerator": 70,
+          "denominator": 10
+         }
+        }
+       }
+      ]
+     },
+     {
+      "selectionId": 8874189,
+      "handicap": 0,
+      "runnerName": "Travis Kelce",
+      "sortPriority": 5,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "logo": "https://assets.sportsbook.fanduel.com/images/team/nfl/kansas_city_chiefs_jersey.png",
+      "secondaryLogo": "https://assets.sportsbook.fanduel.com/images/team/nfl/kansas_city_chiefs.png",
+      "isPlayerSelection": true,
+      "jersey": {
+       "jerseyNumber": "87",
+       "jerseyBg": "dark"
+      },
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": 1200,
+        "americanOddsInt": 1200
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 13
+        },
+        "fractionalOdds": {
+         "numerator": 12,
+         "denominator": 1
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": 1100,
+         "americanOddsInt": 1100
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 12
+         },
+         "fractionalOdds": {
+          "numerator": 11,
+          "denominator": 1
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "canTurnInPlay": true,
+    "associatedMarkets": [
+     {
+      "eventId": 36189006,
+      "eventTypeId": 6423,
+      "externalMarketId": "42.617959519"
+     }
+    ],
+    "isSuperSubEnabled": false,
+    "isBetProtectEligible": false,
+    "shouldDisplayStatsInRunner": true,
+    "eachwayAvailable": false,
+    "legTypes": [
+     "SIMPLE_SELECTION"
+    ]
+   },
+   "734.192727341": {
+    "marketId": "734.192727341",
+    "eventTypeId": 6423,
+    "competitionId": 12282733,
+    "eventId": 36189006,
+    "marketName": "Any Time Touchdown Scorer",
+    "marketTime": "2026-10-26T00:21:00.000Z",
+    "marketType": "ANY_TIME_TOUCHDOWN_SCORER",
+    "bspMarket": false,
+    "sgmMarket": true,
+    "inPlay": false,
+    "numberOfRunners": 27,
+    "numberOfActiveRunners": 27,
+    "numberOfWinners": 1,
+    "sortPriority": -870,
+    "bettingType": "ODDS",
+    "marketStatus": "OPEN",
+    "runners": [
+     {
+      "selectionId": 40845134,
+      "handicap": 0,
+      "runnerName": "Kenneth Walker III",
+      "sortPriority": 1,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "logo": "https://assets.sportsbook.fanduel.com/images/team/nfl/kansas_city_chiefs_jersey.png",
+      "secondaryLogo": "https://assets.sportsbook.fanduel.com/images/team/nfl/kansas_city_chiefs.png",
+      "isPlayerSelection": true,
+      "jersey": {
+       "jerseyNumber": "9",
+       "jerseyBg": "dark"
+      },
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": -125,
+        "americanOddsInt": -125
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 1.8
+        },
+        "fractionalOdds": {
+         "numerator": 100,
+         "denominator": 125
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": -130,
+         "americanOddsInt": -130
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 1.769230769230769
+         },
+         "fractionalOdds": {
+          "numerator": 100,
+          "denominator": 130
+         }
+        }
+       }
+      ]
+     },
+     {
+      "selectionId": 36914881,
+      "handicap": 0,
+      "runnerName": "Jaxon Smith-Njigba",
+      "sortPriority": 2,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "logo": "https://assets.sportsbook.fanduel.com/images/team/nfl/seattle_seahawks_jersey.png",
+      "secondaryLogo": "https://assets.sportsbook.fanduel.com/images/team/nfl/seattle_seahawks.png",
+      "isPlayerSelection": true,
+      "jersey": {
+       "jerseyNumber": "11",
+       "jerseyBg": "dark"
+      },
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": 120,
+        "americanOddsInt": 120
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 2.2
+        },
+        "fractionalOdds": {
+         "numerator": 120,
+         "denominator": 100
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": 125,
+         "americanOddsInt": 125
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 2.25
+         },
+         "fractionalOdds": {
+          "numerator": 125,
+          "denominator": 100
+         }
+        }
+       }
+      ]
+     },
+     {
+      "selectionId": 26919603,
+      "handicap": 0,
+      "runnerName": "Zach Charbonnet",
+      "sortPriority": 3,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "logo": "https://assets.sportsbook.fanduel.com/images/team/nfl/seattle_seahawks_jersey.png",
+      "secondaryLogo": "https://assets.sportsbook.fanduel.com/images/team/nfl/seattle_seahawks.png",
+      "isPlayerSelection": true,
+      "jersey": {
+       "jerseyNumber": "26",
+       "jerseyBg": "dark"
+      },
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": 125,
+        "americanOddsInt": 125
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 2.25
+        },
+        "fractionalOdds": {
+         "numerator": 125,
+         "denominator": 100
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": 130,
+         "americanOddsInt": 130
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 2.3
+         },
+         "fractionalOdds": {
+          "numerator": 130,
+          "denominator": 100
+         }
+        }
+       }
+      ]
+     },
+     {
+      "selectionId": 8874189,
+      "handicap": 0,
+      "runnerName": "Travis Kelce",
+      "sortPriority": 5,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "logo": "https://assets.sportsbook.fanduel.com/images/team/nfl/kansas_city_chiefs_jersey.png",
+      "secondaryLogo": "https://assets.sportsbook.fanduel.com/images/team/nfl/kansas_city_chiefs.png",
+      "isPlayerSelection": true,
+      "jersey": {
+       "jerseyNumber": "87",
+       "jerseyBg": "dark"
+      },
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": 210,
+        "americanOddsInt": 210
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 3.1
+        },
+        "fractionalOdds": {
+         "numerator": 21,
+         "denominator": 10
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": 220,
+         "americanOddsInt": 220
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 3.2
+         },
+         "fractionalOdds": {
+          "numerator": 22,
+          "denominator": 10
+         }
+        }
+       }
+      ]
+     },
+     {
+      "selectionId": 48217510,
+      "handicap": 0,
+      "runnerName": "Seattle Defense",
+      "sortPriority": 14,
+      "result": {},
+      "runnerStatus": "ACTIVE",
+      "logo": "https://assets.sportsbook.fanduel.com/images/team/nfl/seattle_seahawks.png",
+      "isPlayerSelection": true,
+      "winRunnerOdds": {
+       "americanDisplayOdds": {
+        "americanOdds": 750,
+        "americanOddsInt": 750
+       },
+       "trueOdds": {
+        "decimalOdds": {
+         "decimalOdds": 8.5
+        },
+        "fractionalOdds": {
+         "numerator": 75,
+         "denominator": 10
+        }
+       }
+      },
+      "previousWinRunnerOdds": [
+       {
+        "americanDisplayOdds": {
+         "americanOdds": 700,
+         "americanOddsInt": 700
+        },
+        "trueOdds": {
+         "decimalOdds": {
+          "decimalOdds": 8
+         },
+         "fractionalOdds": {
+          "numerator": 70,
+          "denominator": 10
+         }
+        }
+       }
+      ]
+     }
+    ],
+    "canTurnInPlay": true,
+    "associatedMarkets": [
+     {
+      "eventId": 36189006,
+      "eventTypeId": 6423,
+      "externalMarketId": "42.617959478"
+     }
+    ],
+    "isSuperSubEnabled": false,
+    "isBetProtectEligible": true,
+    "shouldDisplayStatsInRunner": false,
+    "eachwayAvailable": false,
+    "legTypes": [
+     "SIMPLE_SELECTION"
+    ]
+   }
+  }
+ }
+}

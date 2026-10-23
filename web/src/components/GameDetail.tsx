@@ -6,8 +6,10 @@ import { marketHold } from '../lib/odds';
 import { MARKETS, MARKET_SIDES } from '../lib/shared';
 import { isPick, useBooks, useCell, useGame, useLoaded, useQuote } from '../lib/store';
 import { gameHref, isPlainClick } from '../lib/view';
+import { BookName } from './BookName';
 import { LiveBadge, MARKET_LABEL, SuspectBadge } from './GameRow';
 import { ChevronLeftIcon } from './icons';
+import { PlayerProps } from './PlayerProps';
 import { METHOD_TIPS, methodLabel, PriceCell } from './PriceCell';
 import { Tip, type TipAlign } from './Tip';
 
@@ -19,7 +21,7 @@ const BADGE = 'rounded-sm border border-white/15 px-1 text-[10px] leading-4 font
 /**
  * One game with every book compared: a table per market with a row per sportsbook (from the server's
  * registry, so another book is another row), the best price starred, a Best row naming the book, and
- * each book's hold.
+ * each book's hold. Below them, the game's player props from every book (read on demand, not streamed).
  */
 export function GameDetail({ gameKey, onBack }: { gameKey: GameKey; onBack: () => void }) {
   const game = useGame(gameKey);
@@ -40,6 +42,8 @@ export function GameDetail({ gameKey, onBack }: { gameKey: GameKey; onBack: () =
             <MarketTable key={m} game={game} market={m} books={books} />
           ))}
           <Legend />
+          {/* Keyed by game: another game starts on the first tab, with no moves carried over. */}
+          <PlayerProps key={game.key} game={game} />
         </>
       )}
     </div>
@@ -170,17 +174,6 @@ function MarketTable({ game, market, books }: { game: WireGame; market: MarketTy
       </table>
       <PickNotes game={game} market={market} />
     </section>
-  );
-}
-
-function BookName({ meta }: { meta: WireBookMeta }) {
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <span aria-hidden="true" className="size-2 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} />
-      <span title={meta.name} className="truncate text-sm font-semibold text-ink">
-        {meta.name}
-      </span>
-    </span>
   );
 }
 

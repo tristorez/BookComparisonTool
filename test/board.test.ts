@@ -255,4 +255,13 @@ describe('Board', () => {
     expect(() => t.h('A', 'draftkings').change({ book: 'draftkings' } as unknown as BookChange)).not.toThrow();
     expect(t.board.counters.aggregatorErrors).toBe(1);
   });
+
+  it('hands out each book’s own view of a game on the board, for on-demand reads such as player props', () => {
+    const t = harness();
+    t.seed('A', 'draftkings', fullMarket([150, -170], [-3.5, -110, -110], [44.5, -110, -110]));
+    t.seed('B', 'fanduel', fullMarket([155, -175], [-3.5, -112, -108], [44.5, -110, -110]));
+    t.flush();
+    expect(t.board.bookGames(GK)).toEqual({ draftkings: game('draftkings'), fanduel: game('fanduel') });
+    expect(t.board.bookGames('2026-10-25:AAA@BBB')).toBeNull();
+  });
 });

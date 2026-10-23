@@ -2,8 +2,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App';
+import { PropsContext, type PropsClient } from '../lib/props';
 import { StoreContext, type OddsStore } from '../lib/store';
-import { delta, GAME, manualStore, pick, quote, snapshot } from '../test/fixtures';
+import { delta, GAME, idleProps, manualStore, pick, propsClient, propsResponse, quote, snapshot } from '../test/fixtures';
 import { GameDetail } from './GameDetail';
 
 afterEach(() => {
@@ -11,7 +12,13 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-const withStore = (store: OddsStore, ui: ReactNode) => render(<StoreContext value={store}>{ui}</StoreContext>);
+/** The player props section reads on its own; it stays loading unless a test passes a client that answers. */
+const withStore = (store: OddsStore, ui: ReactNode, props: PropsClient = idleProps()) =>
+  render(
+    <StoreContext value={store}>
+      <PropsContext value={props}>{ui}</PropsContext>
+    </StoreContext>,
+  );
 
 /** PIT@NO with both books on every market; the spreads are half a point apart (R3 picks). */
 function fullStore(): OddsStore {
@@ -62,7 +69,7 @@ describe('GameDetail', () => {
   it('lists the sportsbooks down the left with both sides of each market, stars the best price, and shows each hold', () => {
     withStore(fullStore(), <GameDetail gameKey={GAME} onBack={() => {}} />);
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('Pittsburgh Steelers at New Orleans Saints');
-    expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Spread', 'Total', 'Moneyline']);
+    expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Spread', 'Total', 'Moneyline', 'Player props']);
 
     const spread = section('Spread');
     expect(texts(within(spread).getAllByRole('columnheader'))).toEqual(['Sportsbook', 'PIT Steelers', 'NO Saints', 'Hold']);
@@ -119,6 +126,17 @@ describe('GameDetail', () => {
     expect(price(spread, 'draftkings', 'home')).toContain('−3 −102');
     expect(spread.querySelector('tr[data-book="draftkings"] td[data-side="home"] [data-flash="up"]')).not.toBeNull();
     expect(spread.querySelector('tr[data-book="fanduel"] [data-flash]')).toBeNull();
+  });
+
+  it('shows the game’s player props below the markets, read for this game', async () => {
+    const rodgers = { stat: 'pass_yds', player: 'aaron rodgers', name: 'Aaron Rodgers', team: 'away', offers: { fanduel: { line: 228.5, prices: { over: -114, under: -114 }, suspended: false } }, best: {} } as const;
+    const props = propsClient((group) => propsResponse(group, group === 'passing' ? [rodgers] : []));
+    const { container } = withStore(fullStore(), <GameDetail gameKey={GAME} onBack={() => {}} />, props);
+    expect(await screen.findByRole('heading', { level: 4, name: 'Passing Yards' })).toBeTruthy();
+    expect(props.calls).toEqual([`/api/games/${encodeURIComponent(GAME)}/props?group=passing`]);
+    // Below everything that was already on the page.
+    const sections = [...container.querySelectorAll('[data-market], [data-legend], [data-props]')].map((el) => el.getAttribute('data-market') ?? (el.hasAttribute('data-legend') ? 'legend' : 'props'));
+    expect(sections).toEqual(['spread', 'total', 'moneyline', 'legend', 'props']);
   });
 
   it('says it is connecting, then that the game left the board', () => {

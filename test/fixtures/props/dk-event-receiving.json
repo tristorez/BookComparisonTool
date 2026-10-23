@@ -1,0 +1,983 @@
+{
+ "events": [
+  {
+   "id": "34118035",
+   "name": "KC Chiefs @ SEA Seahawks",
+   "startEventDate": "2026-10-26T00:20:00.0000000Z",
+   "status": "NOT_STARTED",
+   "participants": [
+    {
+     "id": "18471",
+     "name": "SEA Seahawks",
+     "venueRole": "Home",
+     "type": "Team"
+    },
+    {
+     "id": "18379",
+     "name": "KC Chiefs",
+     "venueRole": "Away",
+     "type": "Team"
+    }
+   ]
+  }
+ ],
+ "markets": [
+  {
+   "id": "380439653",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "Jaxon Smith-Njigba Receiving Yards O/U",
+   "subcategoryId": "14114",
+   "marketType": {
+    "id": "13674",
+    "betOfferTypeId": 0,
+    "name": "Receiving Yards O/U"
+   },
+   "sortOrder": 1,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "EarlyExit",
+    "EarlyExitPlus",
+    "IgnoreSortOrderOnPush",
+    "MicroMarketDelayRemoval",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|13674|2:100635",
+   "componentMapping": {
+    "primary": 8,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  },
+  {
+   "id": "380440054",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "Xavier Worthy Receiving Yards O/U",
+   "subcategoryId": "14114",
+   "marketType": {
+    "id": "13674",
+    "betOfferTypeId": 0,
+    "name": "Receiving Yards O/U"
+   },
+   "sortOrder": 2,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "EarlyExit",
+    "EarlyExitPlus",
+    "IgnoreSortOrderOnPush",
+    "MicroMarketDelayRemoval",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|13674|2:126006",
+   "componentMapping": {
+    "primary": 8,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  },
+  {
+   "id": "380440012",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "Travis Kelce Receiving Yards",
+   "subcategoryId": "16570",
+   "marketType": {
+    "id": "12331",
+    "betOfferTypeId": 0,
+    "name": "Receiving Yards Milestones"
+   },
+   "sortOrder": 3,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "EarlyExit",
+    "EarlyExitPlus",
+    "FeaturedSubcategory",
+    "IgnoreSortOrderOnPush",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|12331|2:54973",
+   "componentMapping": {
+    "primary": 331,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  },
+  {
+   "id": "380439835",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "Travis Kelce Receiving Yards O/U",
+   "subcategoryId": "14114",
+   "marketType": {
+    "id": "13674",
+    "betOfferTypeId": 0,
+    "name": "Receiving Yards O/U"
+   },
+   "sortOrder": 3,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "EarlyExit",
+    "EarlyExitPlus",
+    "IgnoreSortOrderOnPush",
+    "MicroMarketDelayRemoval",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|13674|2:54973",
+   "componentMapping": {
+    "primary": 8,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  },
+  {
+   "id": "380439867",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "Travis Kelce Longest Reception O/U",
+   "subcategoryId": "15948",
+   "marketType": {
+    "id": "13683",
+    "betOfferTypeId": 0,
+    "name": "Longest Reception O/U"
+   },
+   "sortOrder": 3,
+   "tags": [
+    "Cashout",
+    "EarlyExit",
+    "EarlyExitPlus",
+    "IgnoreSortOrderOnPush",
+    "MicroMarketDelayRemoval",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|13683|2:54973",
+   "blurbId": "6640ce36-85df-4d5c-b8f5-e819d8f31194",
+   "componentMapping": {
+    "primary": 8,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  },
+  {
+   "id": "380439743",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "Travis Kelce Receiving Yards O/U - 1st Half",
+   "subcategoryId": "18884",
+   "marketType": {
+    "id": "15522",
+    "betOfferTypeId": 0,
+    "name": "Receiving Yards O/U - 1st Half"
+   },
+   "sortOrder": 3,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "IgnoreSortOrderOnPush",
+    "MicroMarketDelayRemoval",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|15522|2:54973",
+   "blurbId": "883ea2fe-84e2-487b-897a-003cb60a872f",
+   "componentMapping": {
+    "primary": 8,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  },
+  {
+   "id": "380439962",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "Kenneth Walker III Receptions O/U",
+   "subcategoryId": "14115",
+   "marketType": {
+    "id": "13676",
+    "betOfferTypeId": 0,
+    "name": "Receptions O/U"
+   },
+   "sortOrder": 4,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "EarlyExit",
+    "EarlyExitPlus",
+    "IgnoreSortOrderOnPush",
+    "MicroMarketDelayRemoval",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|13676|2:113172",
+   "componentMapping": {
+    "primary": 8,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  },
+  {
+   "id": "380439350",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "A.J. Barner Receptions O/U",
+   "subcategoryId": "14115",
+   "marketType": {
+    "id": "13676",
+    "betOfferTypeId": 0,
+    "name": "Receptions O/U"
+   },
+   "sortOrder": 5,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "EarlyExit",
+    "EarlyExitPlus",
+    "IgnoreSortOrderOnPush",
+    "MicroMarketDelayRemoval",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|13676|2:139903",
+   "componentMapping": {
+    "primary": 8,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  }
+ ],
+ "selections": [
+  {
+   "id": "0QA380439653#2329184129_13L88808Q11238751090Q20",
+   "marketId": "380439653",
+   "label": "Over",
+   "displayOdds": {
+    "american": "−111",
+    "decimal": "1.90",
+    "fractional": "100/111",
+    "percentage": "52%",
+    "multiplier": "1.90x"
+   },
+   "trueOdds": 1.90090091,
+   "points": 94.5,
+   "outcomeType": "Over",
+   "participants": [
+    {
+     "id": "686189",
+     "name": "Jaxon Smith-Njigba",
+     "type": "Player",
+     "seoIdentifier": "Jaxon Smith-Njigba",
+     "statistic": {
+      "prefix": "RecYDs/G",
+      "value": 119.5,
+      "stringValue": "119.5",
+      "showRecentStats": true
+     },
+     "venueRole": "HomePlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "100635"
+     }
+    }
+   ],
+   "sortOrder": 94500,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "1stFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439653#2329184130_13L88808Q1744420368Q20",
+   "marketId": "380439653",
+   "label": "Under",
+   "displayOdds": {
+    "american": "−113",
+    "decimal": "1.88",
+    "fractional": "100/113",
+    "percentage": "53%",
+    "multiplier": "1.88x"
+   },
+   "trueOdds": 1.88495576,
+   "points": 94.5,
+   "outcomeType": "Under",
+   "participants": [
+    {
+     "id": "686189",
+     "name": "Jaxon Smith-Njigba",
+     "type": "Player",
+     "seoIdentifier": "Jaxon Smith-Njigba",
+     "statistic": {
+      "prefix": "RecYDs/G",
+      "value": 119.5,
+      "stringValue": "119.5",
+      "showRecentStats": true
+     },
+     "venueRole": "HomePlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "100635"
+     }
+    }
+   ],
+   "sortOrder": 94502,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "1stFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439835#2326746856_13L88808Q1-1296091928Q20",
+   "marketId": "380439835",
+   "label": "Over",
+   "displayOdds": {
+    "american": "−111",
+    "decimal": "1.90",
+    "fractional": "100/111",
+    "percentage": "52%",
+    "multiplier": "1.90x"
+   },
+   "trueOdds": 1.90090091,
+   "points": 46.5,
+   "outcomeType": "Over",
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "statistic": {
+      "prefix": "RecYDs/G",
+      "value": 59.8,
+      "stringValue": "59.8",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 46500,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "2ndFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439835#2326746857_13L88808Q12105255767Q20",
+   "marketId": "380439835",
+   "label": "Under",
+   "displayOdds": {
+    "american": "−113",
+    "decimal": "1.88",
+    "fractional": "100/113",
+    "percentage": "53%",
+    "multiplier": "1.88x"
+   },
+   "trueOdds": 1.88495576,
+   "points": 46.5,
+   "outcomeType": "Under",
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "statistic": {
+      "prefix": "RecYDs/G",
+      "value": 59.8,
+      "stringValue": "59.8",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 46502,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "2ndFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380440054#2329765811_13L88808Q1-364955777Q20",
+   "marketId": "380440054",
+   "label": "Over",
+   "displayOdds": {
+    "american": "−113",
+    "decimal": "1.88",
+    "fractional": "100/113",
+    "percentage": "53%",
+    "multiplier": "1.88x"
+   },
+   "trueOdds": 1.88495576,
+   "points": 48.5,
+   "outcomeType": "Over",
+   "participants": [
+    {
+     "id": "780227",
+     "name": "Xavier Worthy",
+     "type": "Player",
+     "seoIdentifier": "Xavier Worthy",
+     "statistic": {
+      "prefix": "RecYDs/G",
+      "value": 41.2,
+      "stringValue": "41.2",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "126006"
+     }
+    }
+   ],
+   "sortOrder": 48500,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "1stFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380440054#2329765812_13L88808Q132825230Q20",
+   "marketId": "380440054",
+   "label": "Under",
+   "displayOdds": {
+    "american": "−111",
+    "decimal": "1.90",
+    "fractional": "100/111",
+    "percentage": "52%",
+    "multiplier": "1.90x"
+   },
+   "trueOdds": 1.90090091,
+   "points": 48.5,
+   "outcomeType": "Under",
+   "participants": [
+    {
+     "id": "780227",
+     "name": "Xavier Worthy",
+     "type": "Player",
+     "seoIdentifier": "Xavier Worthy",
+     "statistic": {
+      "prefix": "RecYDs/G",
+      "value": 41.2,
+      "stringValue": "41.2",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "126006"
+     }
+    }
+   ],
+   "sortOrder": 48502,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "1stFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439350#2326725388_13L88808Q1-2107084182Q20",
+   "marketId": "380439350",
+   "label": "Over",
+   "displayOdds": {
+    "american": "−142",
+    "decimal": "1.70",
+    "fractional": "50/71",
+    "percentage": "58%",
+    "multiplier": "1.70x"
+   },
+   "trueOdds": 1.70422536,
+   "points": 2.5,
+   "outcomeType": "Over",
+   "participants": [
+    {
+     "id": "787883",
+     "name": "A.J. Barner",
+     "type": "Player",
+     "seoIdentifier": "AJ Barner",
+     "statistic": {
+      "prefix": "REC/G",
+      "value": 2.5,
+      "stringValue": "2.5",
+      "showRecentStats": true
+     },
+     "venueRole": "HomePlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "139903"
+     }
+    }
+   ],
+   "sortOrder": 2500,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "2ndFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439350#2326725437_13L88808Q11045072483Q20",
+   "marketId": "380439350",
+   "label": "Under",
+   "displayOdds": {
+    "american": "+111",
+    "decimal": "2.11",
+    "fractional": "111/100",
+    "percentage": "47%",
+    "multiplier": "2.11x"
+   },
+   "trueOdds": 2.11,
+   "points": 2.5,
+   "outcomeType": "Under",
+   "participants": [
+    {
+     "id": "787883",
+     "name": "A.J. Barner",
+     "type": "Player",
+     "seoIdentifier": "AJ Barner",
+     "statistic": {
+      "prefix": "REC/G",
+      "value": 2.5,
+      "stringValue": "2.5",
+      "showRecentStats": true
+     },
+     "venueRole": "HomePlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "139903"
+     }
+    }
+   ],
+   "sortOrder": 2502,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "2ndFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439962#2326730942_13L88808Q1730991375Q20",
+   "marketId": "380439962",
+   "label": "Over",
+   "displayOdds": {
+    "american": "+125",
+    "decimal": "2.25",
+    "fractional": "5/4",
+    "percentage": "44%",
+    "multiplier": "2.25x"
+   },
+   "trueOdds": 2.25,
+   "points": 3.5,
+   "outcomeType": "Over",
+   "participants": [
+    {
+     "id": "640873",
+     "name": "Kenneth Walker III",
+     "type": "Player",
+     "seoIdentifier": "Kenneth Walker III",
+     "statistic": {
+      "prefix": "REC/G",
+      "value": 2.8,
+      "stringValue": "2.8",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "113172"
+     }
+    }
+   ],
+   "sortOrder": 3500,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "3rdFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439962#2326730943_13L88808Q1-616481466Q20",
+   "marketId": "380439962",
+   "label": "Under",
+   "displayOdds": {
+    "american": "−160",
+    "decimal": "1.62",
+    "fractional": "5/8",
+    "percentage": "61%",
+    "multiplier": "1.62x"
+   },
+   "trueOdds": 1.625,
+   "points": 3.5,
+   "outcomeType": "Under",
+   "participants": [
+    {
+     "id": "640873",
+     "name": "Kenneth Walker III",
+     "type": "Player",
+     "seoIdentifier": "Kenneth Walker III",
+     "statistic": {
+      "prefix": "REC/G",
+      "value": 2.8,
+      "stringValue": "2.8",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "113172"
+     }
+    }
+   ],
+   "sortOrder": 3502,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "3rdFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439867#2326746831_13L88808Q1-664420185Q20",
+   "marketId": "380439867",
+   "label": "Over",
+   "displayOdds": {
+    "american": "−120",
+    "decimal": "1.83",
+    "fractional": "5/6",
+    "percentage": "54%",
+    "multiplier": "1.83x"
+   },
+   "trueOdds": 1.83333334,
+   "points": 18.5,
+   "outcomeType": "Over",
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "statistic": {
+      "prefix": "LNG",
+      "value": 59,
+      "stringValue": "59",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 18500,
+   "tags": [
+    "MainPointLine",
+    "2ndFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439867#2326746832_13L88808Q1-881516491Q20",
+   "marketId": "380439867",
+   "label": "Under",
+   "displayOdds": {
+    "american": "−108",
+    "decimal": "1.92",
+    "fractional": "25/27",
+    "percentage": "51%",
+    "multiplier": "1.92x"
+   },
+   "trueOdds": 1.92592593,
+   "points": 18.5,
+   "outcomeType": "Under",
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "statistic": {
+      "prefix": "LNG",
+      "value": 59,
+      "stringValue": "59",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 18502,
+   "tags": [
+    "MainPointLine",
+    "2ndFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439743#2326759158_13L88808Q1-537600998Q20",
+   "marketId": "380439743",
+   "label": "Over",
+   "displayOdds": {
+    "american": "−115",
+    "decimal": "1.86",
+    "fractional": "20/23",
+    "percentage": "53%",
+    "multiplier": "1.86x"
+   },
+   "trueOdds": 1.86956522,
+   "points": 19.5,
+   "outcomeType": "Over",
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 19500,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "2ndFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380439743#2326759159_13L88808Q1-2101331898Q20",
+   "marketId": "380439743",
+   "label": "Under",
+   "displayOdds": {
+    "american": "−113",
+    "decimal": "1.88",
+    "fractional": "100/113",
+    "percentage": "53%",
+    "multiplier": "1.88x"
+   },
+   "trueOdds": 1.88495576,
+   "points": 19.5,
+   "outcomeType": "Under",
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 19502,
+   "tags": [
+    "MainPointLine",
+    "SGP",
+    "2ndFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380440012#2329966684_13L88808Q1-563917321Q20",
+   "marketId": "380440012",
+   "label": "10+",
+   "displayOdds": {
+    "american": "−2100",
+    "decimal": "1.04",
+    "fractional": "1/21",
+    "percentage": "95.4%",
+    "multiplier": "1.04x"
+   },
+   "trueOdds": 1.04761905,
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "statistic": {
+      "prefix": "RecYDs/G",
+      "value": 59.8,
+      "stringValue": "59.8",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 106684,
+   "tags": [
+    "SGP",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {},
+   "milestoneValue": 10
+  },
+  {
+   "id": "0QA380440012#2326730934_13L88808Q1-347953252Q20",
+   "marketId": "380440012",
+   "label": "15+",
+   "displayOdds": {
+    "american": "−1060",
+    "decimal": "1.09",
+    "fractional": "5/53",
+    "percentage": "91.3%",
+    "multiplier": "1.09x"
+   },
+   "trueOdds": 1.09433963,
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "statistic": {
+      "prefix": "RecYDs/G",
+      "value": 59.8,
+      "stringValue": "59.8",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 150934,
+   "tags": [
+    "SGP",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {},
+   "milestoneValue": 15
+  },
+  {
+   "id": "0QA380440012#2329966685_13L88808Q11649361331Q20",
+   "marketId": "380440012",
+   "label": "20+",
+   "displayOdds": {
+    "american": "−620",
+    "decimal": "1.16",
+    "fractional": "5/31",
+    "percentage": "86%",
+    "multiplier": "1.16x"
+   },
+   "trueOdds": 1.16129033,
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "statistic": {
+      "prefix": "RecYDs/G",
+      "value": 59.8,
+      "stringValue": "59.8",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 206685,
+   "tags": [
+    "SGP",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {},
+   "milestoneValue": 20
+  }
+ ]
+}

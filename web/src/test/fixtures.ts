@@ -1,15 +1,20 @@
 import type { BookId } from '@shared/domain';
+import type { PropGroup } from '@shared/props';
 import type {
   Delta,
   Heartbeat,
+  PropsResponse,
   Snapshot,
   WireBestNone,
   WireBestPick,
   WireBookMeta,
   WireBookStatus,
   WireGame,
+  WirePropRow,
+  WirePropsBook,
   WireQuote,
 } from '@shared/wire';
+import { PropsClient } from '../lib/props';
 import { OddsStore, type StoreOptions } from '../lib/store';
 import type { EventSourceLike } from '../lib/stream';
 
@@ -115,6 +120,37 @@ export function heartbeat(seq: number, over: Partial<Heartbeat> = {}): Heartbeat
 /** A store whose notifications are flushed by hand (`store.flush()`), with no disconnect grace. */
 export function manualStore(opts: StoreOptions = {}): OddsStore {
   return new OddsStore({ schedule: () => {}, disconnectGraceMs: 0, ...opts });
+}
+
+/** Every registry book read its props fine at `fetchedAt`. */
+export function propsBooks(fetchedAt = Date.now()): WirePropsBook[] {
+  return BOOKS.map((b) => ({ book: b.id, state: 'ok', detail: null, fetchedAt }));
+}
+
+export function propsResponse(group: PropGroup, rows: WirePropRow[] = [], over: Partial<PropsResponse> = {}): PropsResponse {
+  return { game: GAME, group, ts: Date.now(), books: propsBooks(), rows, ...over };
+}
+
+/**
+ * A props client whose server answers each request with `answer(group)`: a response, or an HTTP status
+ * for a failure. `calls` lists the URLs requested. Pass a short `refreshMs` to see it re-read.
+ */
+export function propsClient(answer: (group: PropGroup) => PropsResponse | number, refreshMs?: number): PropsClient & { calls: string[] } {
+  const calls: string[] = [];
+  const client = new PropsClient({
+    refreshMs,
+    fetch: async (url) => {
+      calls.push(url);
+      const body = answer((new URL(url, 'http://x').searchParams.get('group') ?? 'passing') as PropGroup);
+      return typeof body === 'number' ? { ok: false, status: body, json: async () => ({}) } : { ok: true, status: 200, json: async () => body };
+    },
+  });
+  return Object.assign(client, { calls });
+}
+
+/** A props client that never answers: the props section stays loading. */
+export function idleProps(): PropsClient {
+  return new PropsClient({ fetch: () => new Promise(() => {}) });
 }
 
 /** Drives the client the way a browser EventSource would. */

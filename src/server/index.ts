@@ -12,6 +12,7 @@ import { buildApp } from './app.js';
 import { Board } from './board.js';
 import { ConfigError, loadConfig, loadLocalEnv, type Config } from './config.js';
 import { LatencyTracker } from './latency.js';
+import { PropsService, type PropsReader } from './props.js';
 import { BOOKS, createConnector, regionOf } from './registry.js';
 import { SseHub } from './sse.js';
 
@@ -54,11 +55,23 @@ for (const book of cfg.books) {
 
 const hub = new SseHub(board, { log });
 const feedLink = cfg.feedListen ? new FeedLinkServer({ board, books: cfg.books, token: cfg.feedToken!, latency, log }) : null;
+// Player props are read on demand through this box's connectors (their HTTP clients and keys); never streamed.
+const readers: Partial<Record<BookId, PropsReader>> = {};
+for (const [book, c] of connectors) if (c.fetchProps) readers[book] = c.fetchProps.bind(c);
+const props = new PropsService({
+  books: cfg.books,
+  games: (game) => board.bookGames(game),
+  readers,
+  bookDown: (book) => board.bookStatus(book).stale,
+  ttlMs: cfg.propsTtlMs,
+  log,
+});
 
 const app = await buildApp({
   board,
   hub,
   latency,
+  props,
   cfg,
   chaos: async (feed, book, action) => {
     const c = feed === cfg.feedId ? connectors.get(book) : undefined;

@@ -252,7 +252,7 @@ export interface WirePropBest {
 /** One player on one stat, with each book's offer. */
 export interface WirePropRow {
   stat: PropStat;
-  /** `playerKey()` of the name: the cross-book join key. */
+  /** `playerKey()` of the name (the first book's, where the books name the player differently): the cross-book join key. */
   player: string;
   /** Display name, as the first book in registry order writes it. */
   name: string;

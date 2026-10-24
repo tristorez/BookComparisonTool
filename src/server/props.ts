@@ -200,17 +200,20 @@ function describe(err: unknown): string {
 }
 
 /**
- * Line the books up: one row per stat and player (`playerKey`), with each book's offer and the best price
- * per side by the board's own rules (src/shared/bestPrice.ts, in PROP_SIDE_TERMS' market terms): on the
- * same line the higher payout wins, on different lines the better line for the bettor (`by line`). Prices
- * that aren't usable American odds are dropped, as the board drops them.
+ * Line the books up: one row per stat and player (`playerKey`, or the first book's name for a player the
+ * books name differently: `nameAliases`), with each book's offer and the best price per side by the
+ * board's own rules (src/shared/bestPrice.ts, in PROP_SIDE_TERMS' market terms): on the same line the
+ * higher payout wins, on different lines the better line for the bettor (`by line`). Prices that aren't
+ * usable American odds are dropped, as the board drops them.
  */
 export function mergeProps(perBook: readonly { book: BookId; props: readonly BookProp[]; stale?: boolean }[]): WirePropRow[] {
   const rows = new Map<string, WirePropRow>();
   const stale = new Set(perBook.flatMap((b) => (b.stale ? [b.book] : [])));
+  const aliases = nameAliases(perBook);
   for (const { book, props } of perBook) {
     for (const p of props) {
-      const player = playerKey(p.player);
+      const named = playerKey(p.player);
+      const player = aliases.get(`${book}|${named}`) ?? named;
       const prices = Object.fromEntries(Object.entries(p.prices).filter(([, a]) => isValidAmerican(a))) as Partial<Record<PropSide, number>>;
       if (player === '' || Object.keys(prices).length === 0 || (PROP_STATS[p.stat].kind === 'ou' && (p.line === null || !Number.isFinite(p.line)))) continue;
       const key = `${p.stat}|${player}`;
@@ -224,6 +227,44 @@ export function mergeProps(perBook: readonly { book: BookId; props: readonly Boo
   const out = [...rows.values()];
   for (const row of out) row.best = bestOf(row, stale);
   return out.sort(compareRows);
+}
+
+/**
+ * Players the books name differently ("Cameron Ward" at DK is "Cam Ward" at FD, "Andrew Ogletree" is "Drew
+ * Ogletree"), by `<book>|<playerKey>` to the first book's key. Within one tab of one game, two names are
+ * one player when they play for the same team under the same surname, each book lists only one such
+ * player, and one first name starts or ends the other. A pure nickname ("Bam" Knight is Zonovan) stays
+ * two rows: a wrong join would compare two players' prices.
+ */
+function nameAliases(perBook: readonly { book: BookId; props: readonly BookProp[] }[]): Map<string, string> {
+  // By `<team>|<surname>`: each book's names there, books in registry order.
+  const places = new Map<string, Map<BookId, Set<string>>>();
+  for (const { book, props } of perBook) {
+    for (const p of props) {
+      if (p.team === null) continue;
+      const key = playerKey(p.player);
+      const place = `${p.team}|${key.slice(key.lastIndexOf(' ') + 1)}`;
+      const names = places.get(place) ?? new Map<BookId, Set<string>>();
+      places.set(place, names);
+      names.set(book, (names.get(book) ?? new Set<string>()).add(key));
+    }
+  }
+  const aliases = new Map<string, string>();
+  for (const names of places.values()) {
+    // Two such players at one book: no telling which one another book's name is.
+    if ([...names.values()].some((keys) => keys.size > 1)) continue;
+    const only = [...names].map(([book, keys]) => ({ book, key: [...keys][0]! }));
+    const first = only[0]!.key;
+    for (const { book, key } of only) if (key !== first && sameFirstName(key, first)) aliases.set(`${book}|${key}`, first);
+  }
+  return aliases;
+}
+
+/** Two keys whose first names (all but the surname) are one a start or end of the other, at least two letters: "cam ward", "cameron ward". */
+function sameFirstName(a: string, b: string): boolean {
+  const first = (key: string) => key.slice(0, Math.max(0, key.lastIndexOf(' ')));
+  const [short, long] = [first(a), first(b)].sort((x, y) => x.length - y.length) as [string, string];
+  return short.length >= 2 && (long.startsWith(short) || long.endsWith(short));
 }
 
 /**

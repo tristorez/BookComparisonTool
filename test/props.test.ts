@@ -235,6 +235,32 @@ describe('lining the books up', () => {
     const merged = mergeProps([{ book: 'fanduel', props: [{ stat: 'rec_yds', player: 'X', team: null, line: 40.5, prices: { over: 50, under: -110 }, suspended: false }] }]);
     expect(merged[0]?.offers.fanduel?.prices).toEqual({ under: -110 });
   });
+
+  it('joins a player the books name differently only when the team, surname and first name leave no doubt', () => {
+    const prop = (player: string, team: BookProp['team'], over = -110): BookProp => ({ stat: 'pass_yds', player, team, line: 220.5, prices: { over, under: -110 }, suspended: false });
+    const merge = (dkProps: BookProp[], fdProps: BookProp[]) =>
+      mergeProps([
+        { book: 'draftkings', props: dkProps },
+        { book: 'fanduel', props: fdProps },
+      ]);
+    const shown = (rows: ReturnType<typeof mergeProps>) => rows.map((r) => `${r.name}: ${Object.keys(r.offers).join('+')}`);
+    // As DK and FD named them on 2026-10-24: "Cam" starts "Cameron", "Drew" ends "Andrew". One row, named as DK writes it, compared.
+    const ward = merge([prop('Cameron Ward', 'home')], [prop('Cam Ward', 'home', -105)]);
+    expect(shown(ward)).toEqual(['Cameron Ward: draftkings+fanduel']);
+    expect(ward[0]?.best.over).toEqual({ books: ['fanduel'], exact: true });
+    expect(shown(merge([prop('Andrew Ogletree', 'away')], [prop('Drew Ogletree', 'away')]))).toEqual(['Andrew Ogletree: draftkings+fanduel']);
+    // A pure nickname, another team, or no team: two rows.
+    expect(merge([prop('Zonovan Knight', 'home')], [prop('Bam Knight', 'home')])).toHaveLength(2);
+    expect(merge([prop('Cameron Ward', 'home')], [prop('Cam Ward', 'away')])).toHaveLength(2);
+    expect(merge([prop('Cameron Ward', 'home')], [prop('Cam Ward', null)])).toHaveLength(2);
+    // Two Browns on one team at DK: FD's "Christopher Brown" could be either, so it stays its own row.
+    expect(shown(merge([prop('Chris Brown', 'home'), prop('Christian Brown', 'home')], [prop('Christopher Brown', 'home')]))).toHaveLength(3);
+    // Teammates who share a surname, named alike at both books, still join by name.
+    expect(shown(merge([prop('Josh Allen', 'home'), prop('Kyle Allen', 'home')], [prop('Kyle Allen', 'home'), prop('Josh Allen', 'home')]))).toEqual([
+      'Josh Allen: draftkings+fanduel',
+      'Kyle Allen: draftkings+fanduel',
+    ]);
+  });
 });
 
 describe('PropsService', () => {

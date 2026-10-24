@@ -63,7 +63,8 @@ connectors also run alone: `npm run watch:fd`, `npm run watch:dk`, `npm run watc
   connection pool (`GET /api/games/:game/props?group=`, `src/server/props.ts`). Each read is shared by
   every viewer for 10 s (`PROPS_TTL_MS`), so load on the books grows with the games being viewed, not
   with viewers, and the main lines' stream, merge and connections are untouched. Players match by stat
-  and name, with punctuation and suffixes dropped ("A.J. Barner" is "AJ Barner"). Best price per side
+  and name, with punctuation and suffixes dropped ("A.J. Barner" is "AJ Barner"), and across a shortened
+  first name ("Cam Ward" is "Cameron Ward") when the team and surname leave no doubt. Best price per side
   uses the rules above (same line: payout; different lines: `by line`) and is starred only where two or
   more books offer it from a current read; a book whose reads fail keeps its last props on screen,
   hatched and never starred. The section re-reads every 15 s while it is on screen and says how old each

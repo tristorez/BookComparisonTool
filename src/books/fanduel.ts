@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import WebSocket from 'ws';
 import type { Dispatcher } from 'undici';
-import { BROWSER_UA, HttpError, backoffMs, createDispatcher, createWsAgent, errMsg, isBlocked, requestJson } from './http.js';
+import { BROWSER_UA, HttpError, backoffMs, createDispatcher, createWsAgent, errMsg, isBlocked, requestJson, type JsonResponse } from './http.js';
 import { parseAmerican } from './odds.js';
 import { americanToDecimal } from '../shared/odds.js';
+import { PROP_STATS, type PropGroup, type PropStat } from '../shared/props.js';
 import { gameKey, resolveTeam, type Team } from './teams.js';
-import { BookConnector, quoteRefsFor, type BookGame, type Channel, type MarketType, type Quote, type QuoteRef, type Side } from './types.js';
+import { BookConnector, ouPrices, quoteRefsFor, type BookGame, type BookProp, type Channel, type MarketType, type Quote, type QuoteRef, type Side } from './types.js';
 
 /**
  * FanDuel connector.
@@ -36,6 +37,7 @@ const KEY_REFRESH_MIN_GAP_MS = 300_000;
 /** ...unless the bundle couldn't be read at all (network, timeout), which may retry after this. */
 const KEY_REFRESH_RETRY_MS = 30_000;
 const AMERICAN_FOOTBALL = 6423; // Betfair eventTypeId
+const TIMEZONE = encodeURIComponent('America/New_York');
 const NFL_COMPETITION = 'NFL';
 
 const GAME_LINE_TYPES: Record<string, MarketType> = {
@@ -44,6 +46,41 @@ const GAME_LINE_TYPES: Record<string, MarketType> = {
   'TOTAL_POINTS_(OVER/UNDER)': 'total',
 };
 const RESULT_SIDES: Record<string, Side> = { HOME: 'home', AWAY: 'away', OVER: 'over', UNDER: 'under' };
+
+/** The event-page tab holding each group of player props (the site's own tab slugs). */
+const PROP_TABS: Record<PropGroup, string> = {
+  passing: 'passing-props',
+  rushing: 'rushing-props',
+  receiving: 'receiving-props',
+  touchdowns: 'td-scorer-props',
+};
+/**
+ * Over/under player props are `PLAYER_X_<STAT>`, often with a `_HIGH`/`_MEDIUM`/`_LOW` tier, and OVER/UNDER
+ * runners whose handicap is the line; `PLAYER_X_ALT_<STAT>` are milestone ladders and are left out. These
+ * are the stats FD's NJ prop tabs listed for every game we read (2026-10-23).
+ */
+const FD_OU_STATS: Record<string, PropStat> = {
+  PASSING_YARDS: 'pass_yds',
+  PASSING_TOUCHDOWNS: 'pass_tds',
+  RUSHING_YARDS: 'rush_yds',
+  'RUSHING_+_RECEIVING_YARDS': 'rush_rec_yds',
+  RECEIVING_YARDS: 'rec_yds',
+  RECEPTIONS: 'receptions',
+};
+/** Scorer markets: one runner per player. */
+const FD_YES_STATS: Record<string, PropStat> = {
+  ANY_TIME_TOUCHDOWN_SCORER: 'td_anytime',
+  X_TOUCHDOWN_SCORER_QB: 'td_first', // "1st Touchdown Scorer"
+  LAST_TOUCHDOWN_SCORER: 'td_last',
+  'TO_SCORE_2+_TOUCHDOWNS': 'td_2plus',
+};
+/**
+ * A props tab's markets (players, lines) are re-read at most this often, as the board is: the event page
+ * is CDN-cached anyway, and every props read prices the markets from SMP. Unused tabs are dropped after
+ * PROP_PAGE_EVICT_MS.
+ */
+const PROP_PAGE_TTL_MS = 30_000;
+const PROP_PAGE_EVICT_MS = 10 * 60_000;
 
 // FD's own client batches 70 ids per SMP request and 350 per PIR subscription.
 const POLL_BATCH = 70;
@@ -99,12 +136,18 @@ interface FdRunner {
   runnerStatus?: string;
   result?: { type?: string };
   winRunnerOdds?: FdOdds;
+  /** Event pages: the player's team jersey, e.g. `…/images/team/nfl/kansas_city_chiefs_jersey.png`. */
+  logo?: string;
+  isPlayerSelection?: boolean;
 }
 interface FdMarket {
   marketId: string;
   eventId: number;
   competitionId?: number;
   marketType: string;
+  /** Event pages: e.g. "Patrick Mahomes - Passing Yds". */
+  marketName?: string;
+  marketStatus?: string;
   runners?: FdRunner[];
 }
 interface FdEvent {
@@ -208,6 +251,8 @@ export class FanDuelConnector extends BookConnector {
   private readonly discoveryIntervalMs: number;
   private readonly proxyUrl: string | undefined;
   private readonly http: Dispatcher;
+  /** Player props' own connection pool, so slow props reads can't queue the 1 s poll or discovery. */
+  private readonly propsHttp: Dispatcher;
   private appKey: string;
   private pirKey: string;
   private keyRefresh: Promise<boolean> | null = null;
@@ -218,6 +263,10 @@ export class FanDuelConnector extends BookConnector {
   private readonly markets = new Map<string, TrackedMarket>();
   private readonly events = new Map<string, BookGame>(); // by FD eventId
   private readonly closedMarkets = new Map<string, number>(); // marketId -> closed at
+  /** Each props group's markets by `<eventId>|<group>`, and when its tab was read (PROP_PAGE_TTL_MS). */
+  private readonly propPages = new Map<string, { markets: FdMarket[]; at: number }>();
+  /** Groups whose tab listed player props of no type we read: logged once. */
+  private readonly warnedPropTypes = new Set<PropGroup>();
   private readonly timers = new Set<NodeJS.Timeout>();
   private running = false;
   /**
@@ -267,6 +316,7 @@ export class FanDuelConnector extends BookConnector {
     this.discoveryIntervalMs = opts.discoveryIntervalMs ?? 30_000;
     this.proxyUrl = opts.proxyUrl;
     this.http = createDispatcher(opts.proxyUrl);
+    this.propsHttp = createDispatcher(opts.proxyUrl);
     this.appKey = opts.appKey ?? DEFAULT_APP_KEY;
     this.pirKey = opts.pirKey ?? DEFAULT_PIR_KEY;
   }
@@ -326,14 +376,12 @@ export class FanDuelConnector extends BookConnector {
   private async discover(): Promise<void> {
     for (let attempt = 1; ; attempt++) {
       try {
-        const base = `https://sbapi.${this.region}.sportsbook.fanduel.com/api`;
-        const tz = encodeURIComponent('America/New_York');
         const [board, inPlay] = await Promise.all([
-          this.getJson<FdPage>(`${base}/content-managed-page?page=CUSTOM&customPageId=nfl&pbHorizontal=false&timezone=${tz}&_ak=${this.appKey}`, {
+          this.getJson<FdPage>(`${this.sbapi}/content-managed-page?page=CUSTOM&customPageId=nfl&pbHorizontal=false&timezone=${TIMEZONE}&_ak=${this.appKey}`, {
             timeoutMs: DISCOVERY_TIMEOUT_MS,
           }).then((r) => r.data),
           // Live games are also on the NFL page; the in-play feed is a second source in case they drop off it.
-          this.getJson<FdPage>(`${base}/in-play?eventTypeId=${AMERICAN_FOOTBALL}&includeTabs=false&timezone=${tz}&_ak=${this.appKey}`, {
+          this.getJson<FdPage>(`${this.sbapi}/in-play?eventTypeId=${AMERICAN_FOOTBALL}&includeTabs=false&timezone=${TIMEZONE}&_ak=${this.appKey}`, {
             timeoutMs: DISCOVERY_TIMEOUT_MS,
           })
             .then((r) => r.data)
@@ -401,7 +449,7 @@ export class FanDuelConnector extends BookConnector {
 
   private async appKeyWorks(key: string): Promise<boolean> {
     try {
-      const url = `https://sbapi.${this.region}.sportsbook.fanduel.com/api/content-managed-page?page=CUSTOM&customPageId=nfl&pbHorizontal=false&_ak=${key}`;
+      const url = `${this.sbapi}/content-managed-page?page=CUSTOM&customPageId=nfl&pbHorizontal=false&_ak=${key}`;
       return Boolean((await this.getJson<FdPage>(url, { timeoutMs: DISCOVERY_TIMEOUT_MS })).data.attachments);
     } catch {
       return false;
@@ -581,14 +629,20 @@ export class FanDuelConnector extends BookConnector {
     return interval - offset;
   }
 
+  /** One read of SMP, the uncached price origin, for a batch of markets (main lines and props alike). */
+  private async postSmp(batch: string[], dispatcher = this.http): Promise<JsonResponse<FdPriceUpdate[]>> {
+    const url = `https://smp.${this.region}.sportsbook.fanduel.com/api/sports/fixedodds/readonly/v1/getMarketPrices?priceHistory=0`;
+    const res = await this.getJson<FdPriceUpdate[]>(url, { method: 'POST', body: JSON.stringify({ marketIds: batch }), timeoutMs: POLL_TIMEOUT_MS, dispatcher });
+    // An empty answer to a non-empty request is a failure, not proof the prices are current.
+    if (!Array.isArray(res.data) || !res.data.length) throw new Error(`SMP returned no markets for ${batch.length} requested`);
+    return res;
+  }
+
   private async fetchPrices(ids: string[], channel: Channel): Promise<void> {
     if (!ids.length) return;
-    const url = `https://smp.${this.region}.sportsbook.fanduel.com/api/sports/fixedodds/readonly/v1/getMarketPrices?priceHistory=0`;
     await Promise.all(
       chunk(ids, POLL_BATCH).map(async (batch) => {
-        const res = await this.getJson<FdPriceUpdate[]>(url, { method: 'POST', body: JSON.stringify({ marketIds: batch }), timeoutMs: POLL_TIMEOUT_MS });
-        // An empty answer to a non-empty request is a failure, not proof the prices are current.
-        if (!Array.isArray(res.data) || !res.data.length) throw new Error(`SMP returned no markets for ${batch.length} requested`);
+        const res = await this.postSmp(batch);
         this.touch(res.receivedAt);
         if (channel === 'poll') this.lastPollOkAt = res.receivedAt;
         const returned = new Set<string>();
@@ -852,8 +906,7 @@ export class FanDuelConnector extends BookConnector {
         }
         continue;
       }
-      const odds = r.winRunnerOdds;
-      const american = parseAmerican(odds?.americanDisplayOdds?.americanOddsInt ?? odds?.americanDisplayOdds?.americanOdds);
+      const american = runnerAmerican(r);
       if (american === null) continue;
       quotes.push({
         book: this.book,
@@ -862,8 +915,8 @@ export class FanDuelConnector extends BookConnector {
         side,
         line: m.type === 'moneyline' ? null : (r.handicap ?? null),
         american,
-        decimal: odds?.trueOdds?.decimalOdds?.decimalOdds ?? americanToDecimal(american),
-        suspended: !marketOpen || (r.runnerStatus !== undefined && r.runnerStatus !== 'ACTIVE'),
+        decimal: r.winRunnerOdds?.trueOdds?.decimalOdds?.decimalOdds ?? americanToDecimal(american),
+        suspended: !marketOpen || runnerInactive(r),
         live: inPlay,
         bookTime,
         receivedAt,
@@ -887,6 +940,72 @@ export class FanDuelConnector extends BookConnector {
       }
     }
     this.commit({ games, quotes });
+  }
+
+  // ---------------------------------------------------------------- player props (on demand)
+
+  /**
+   * One group of player props for an FD game. The event page's tab names the markets (players, lines),
+   * but it is CDN-cached like the board (15 s + 60 s stale-while-revalidate), so it is re-read only every
+   * PROP_PAGE_TTL_MS and, as for main lines, never used for prices: those come from the uncached SMP
+   * origin, and a read SMP can't price fails (the props service then keeps the last good one, marked).
+   */
+  async fetchProps(game: BookGame, group: PropGroup): Promise<BookProp[]> {
+    const markets = await this.propMarkets(game.bookEventId, group);
+    if (!markets.length) return [];
+    return parseFdProps(markets, await this.readPrices(markets.map((m) => m.marketId)), game);
+  }
+
+  /** The group's prop markets on its event-page tab, from a read at most PROP_PAGE_TTL_MS old. */
+  private async propMarkets(eventId: string, group: PropGroup): Promise<FdMarket[]> {
+    const now = Date.now();
+    for (const [key, p] of this.propPages) if (now - p.at > PROP_PAGE_EVICT_MS) this.propPages.delete(key);
+    const key = `${eventId}|${group}`;
+    const cached = this.propPages.get(key);
+    if (cached && now - cached.at < PROP_PAGE_TTL_MS) return cached.markets;
+    const all = Object.values((await this.readEventPage(eventId, PROP_TABS[group])).attachments?.markets ?? {});
+    // A tab can carry another group's stat (receiving lists rush + receiving yards); that tab prices it.
+    const markets = all.filter((m) => {
+      const stat = fdPropStat(m);
+      return stat !== null && PROP_STATS[stat].group === group;
+    });
+    // Player-prop markets but none of a type we read: FD has likely renamed them, which would otherwise
+    // look exactly like a game with no props posted.
+    const unread = all.filter((m) => fdPropStat(m) === null && /^PLAYER_X_(?!ALT_)|TOUCHDOWN_SCORER/.test(m.marketType));
+    if (!markets.length && unread.length && !this.warnedPropTypes.has(group)) {
+      this.warnedPropTypes.add(group);
+      this.log(`props: the ${group} tab lists ${unread.length} player-prop markets, none of a type we read (${[...new Set(unread.map((m) => m.marketType))].slice(0, 5).join(', ')})`);
+    }
+    this.propPages.set(key, { markets, at: now });
+    return markets;
+  }
+
+  /**
+   * One tab of an event page. A rejected app key isn't refreshed here: discovery adopts FD's current one
+   * within its next run, and FD answers other errors with the same body, which must not use up the
+   * refresh discovery may need.
+   */
+  private async readEventPage(eventId: string, tab: string): Promise<FdPage> {
+    const url = `${this.sbapi}/event-page?eventId=${encodeURIComponent(eventId)}&tab=${tab}&timezone=${TIMEZONE}&_ak=${this.appKey}`;
+    const page = (await this.getJson<FdPage>(url, { timeoutMs: DISCOVERY_TIMEOUT_MS, dispatcher: this.propsHttp })).data;
+    // Like the board, a page without attachments is an error page, not an event with no props.
+    if (!page.attachments) throw new Error('event page has no attachments');
+    return page;
+  }
+
+  /** SMP prices for the given markets, by market id. A refusal wins over other failures, so the caller backs off. */
+  private async readPrices(ids: string[]): Promise<Map<string, FdPriceUpdate>> {
+    const out = new Map<string, FdPriceUpdate>();
+    const reads = await Promise.allSettled(chunk(ids, POLL_BATCH).map((batch) => this.postSmp(batch, this.propsHttp)));
+    const failed = reads.flatMap((r) => (r.status === 'rejected' ? [r.reason as unknown] : []));
+    if (failed.length) throw failed.find(isBlocked) ?? failed[0];
+    for (const r of reads) if (r.status === 'fulfilled') for (const update of r.value.data) out.set(update.marketId, update);
+    return out;
+  }
+
+  /** FD's board and event-page API for this region. */
+  private get sbapi(): string {
+    return `https://sbapi.${this.region}.sportsbook.fanduel.com/api`;
   }
 
   // ---------------------------------------------------------------- health & plumbing
@@ -921,10 +1040,10 @@ export class FanDuelConnector extends BookConnector {
     this.evaluateHealth();
   }
 
-  /** A JSON request with the headers FD's own site sends. */
-  private getJson<T>(url: string, init: { method?: 'GET' | 'POST'; body?: string; timeoutMs: number }) {
+  /** A JSON request with the headers FD's own site sends (on the main pool unless told otherwise). */
+  private getJson<T>(url: string, init: { method?: 'GET' | 'POST'; body?: string; timeoutMs: number; dispatcher?: Dispatcher }) {
     return requestJson<T>(url, {
-      dispatcher: this.http,
+      dispatcher: init.dispatcher ?? this.http,
       method: init.method,
       body: init.body,
       timeoutMs: init.timeoutMs,
@@ -1051,6 +1170,74 @@ function teamsOf(ev: FdEvent, markets: FdMarket[]): { away: Team; home: Team } |
   const a = resolveTeam(awayName);
   const h = resolveTeam(homeName);
   return a && h ? { away: a, home: h } : null;
+}
+
+/**
+ * Player props from an FD event page's markets, priced by SMP's answer (`prices`, by market id): the
+ * cached page names the markets and players, SMP prices them. `teams` (the game's team codes) places
+ * each player by the team in their runner's logo.
+ */
+export function parseFdProps(markets: readonly FdMarket[], prices: ReadonlyMap<string, FdPriceUpdate>, teams: Pick<BookGame, 'away' | 'home'>): BookProp[] {
+  const out: BookProp[] = [];
+  for (const m of markets) {
+    const stat = fdPropStat(m);
+    if (stat === null) continue;
+    const smp = prices.get(m.marketId);
+    // SMP's runner fields (price, handicap, status) replace the cached page's; names and logos stay.
+    const runners = (m.runners ?? []).map((r) => {
+      const fresh = smp?.runnerDetails?.find((x) => x.selectionId === r.selectionId);
+      return fresh ? { ...r, ...fresh } : r;
+    });
+    // SMP leaves closed markets out of its answer, and the cached page can still list one, so a market
+    // SMP answered without is shown as not open rather than at the page's price.
+    const marketOpen = smp !== undefined && (smp.marketStatus ?? m.marketStatus ?? 'OPEN') === 'OPEN';
+    if (PROP_STATS[stat].kind === 'yes') {
+      for (const r of runners) {
+        const american = runnerAmerican(r);
+        // Scorer markets also list "Seattle Defense" (flagged a player selection all the same).
+        if (r.isPlayerSelection === false || !r.runnerName || TEAM_RUNNER.test(r.runnerName) || american === null) continue;
+        out.push({ stat, player: r.runnerName.trim(), team: fdTeamSide(r, teams), line: null, prices: { yes: american }, suspended: !marketOpen || runnerInactive(r) });
+      }
+      continue;
+    }
+    const over = runners.find((r) => r.result?.type === 'OVER');
+    const under = runners.find((r) => r.result?.type === 'UNDER');
+    const line = over?.handicap ?? under?.handicap;
+    const player = m.marketName?.split(' - ')[0]?.trim(); // "Patrick Mahomes - Passing Yds"
+    const sides = ouPrices(over ? runnerAmerican(over) : null, under ? runnerAmerican(under) : null);
+    // Both sides must quote one line (a partial SMP answer could pair a fresh over with the page's old under).
+    if (line === undefined || !Number.isFinite(line) || (over && under && over.handicap !== under.handicap) || !player || sides === null) continue;
+    out.push({
+      stat,
+      player,
+      team: fdTeamSide(over ?? under, teams),
+      line,
+      prices: sides,
+      suspended: !marketOpen || [over, under].some((r) => r !== undefined && runnerInactive(r)),
+    });
+  }
+  return out;
+}
+
+/** Which prop stat an FD market prices, or null for anything else (alt ladders, specials, game lines). */
+function fdPropStat(m: FdMarket): PropStat | null {
+  const yes = FD_YES_STATS[m.marketType];
+  if (yes) return yes;
+  const ou = /^PLAYER_X_(?!ALT_)(.+?)(?:_(?:HIGH|MEDIUM|LOW))?$/.exec(m.marketType)?.[1];
+  return ou === undefined ? null : (FD_OU_STATS[ou] ?? null);
+}
+
+const runnerAmerican = (r: FdRunner) => parseAmerican(r.winRunnerOdds?.americanDisplayOdds?.americanOddsInt ?? r.winRunnerOdds?.americanDisplayOdds?.americanOdds);
+/** A runner FD has stopped taking bets on (any status but ACTIVE). */
+const runnerInactive = (r: FdRunner) => r.runnerStatus !== undefined && r.runnerStatus !== 'ACTIVE';
+/** A team, not a player, among a scorer market's runners ("Seattle Defense"). */
+const TEAM_RUNNER = /\b(defen[cs]e|d\/st)$/i;
+
+/** The player's side of the game, from the team in their runner's jersey logo (`…/team/nfl/kansas_city_chiefs_jersey.png`). */
+function fdTeamSide(r: FdRunner | undefined, teams: Pick<BookGame, 'away' | 'home'>): 'away' | 'home' | null {
+  const slug = r?.logo?.match(/\/team\/nfl\/([a-z0-9_]+?)(?:_jersey)?\.png/i)?.[1];
+  const team = slug ? resolveTeam(slug.replace(/_/g, ' ')) : null;
+  return team?.code === teams.away ? 'away' : team?.code === teams.home ? 'home' : null;
 }
 
 function chunk<T>(items: T[], size: number): T[][] {

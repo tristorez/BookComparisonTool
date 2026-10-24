@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { MARKET_SIDES, type BookId, type Channel, type ConnectionState, type MarketType, type Side } from '../shared/domain.js';
+import type { PropGroup, PropSide, PropStat } from '../shared/props.js';
 
 // The primitive unions live in src/shared/domain.ts so the browser can use them without node:events.
 export type { BookId, Channel, ConnectionState, MarketType, Side };
@@ -93,6 +94,25 @@ export interface BookSnapshot {
   status: BookStatus;
 }
 
+/** One player prop at one book: a player's line and prices on one stat (src/shared/props.ts). */
+export interface BookProp {
+  stat: PropStat;
+  /** The player's name as the book writes it. */
+  player: string;
+  /** The player's side of the game, when the book says. */
+  team: 'away' | 'home' | null;
+  /** The line on an over/under stat; null on a scorer market. */
+  line: number | null;
+  prices: Partial<Record<PropSide, number>>;
+  suspended: boolean;
+}
+
+/** An over/under's prices, keeping the sides that have one; null when neither does. */
+export function ouPrices(over: number | null, under: number | null): BookProp['prices'] | null {
+  if (over === null && under === null) return null;
+  return { ...(over !== null && { over }), ...(under !== null && { under }) };
+}
+
 export const quoteKey = (q: QuoteRef): string => `${q.gameKey}|${q.market}|${q.side}`;
 
 /** Every quote slot a market of this type can hold. */
@@ -115,6 +135,13 @@ export abstract class BookConnector extends EventEmitter<ConnectorEvents> {
   abstract readonly book: BookId;
   abstract start(): Promise<void>;
   abstract stop(): Promise<void>;
+  /**
+   * One group of player props for one of this book's games (the board's `BookGame`, so its event id and
+   * teams), read on demand for the game page; src/server/props.ts shares each read between viewers. Apart
+   * from the HTTP client and keys, it shares nothing with the main-line ingestion. A book without a props
+   * reader leaves it out.
+   */
+  fetchProps?(game: BookGame, group: PropGroup): Promise<BookProp[]>;
 
   // What consumers have been told: games by game key, quotes by `quoteKey`.
   private readonly gameState = new Map<string, BookGame>();

@@ -5,13 +5,16 @@ import { BROWSER_UA, backoffMs, createDispatcher, createWsAgent, errMsg, isBlock
 import { decimalToAmerican, parseAmerican } from './odds.js';
 import { MARKET_SIDES } from '../shared/domain.js';
 import { americanToDecimal } from '../shared/odds.js';
+import { PROP_STATS, type PropGroup, type PropStat } from '../shared/props.js';
 import { gameKey, resolveTeam } from './teams.js';
 import {
   BookConnector,
+  ouPrices,
   quoteKey,
   quoteRefsFor,
   type BookChange,
   type BookGame,
+  type BookProp,
   type Channel,
   type MarketType,
   type Quote,
@@ -115,9 +118,53 @@ const REPLACEMENT_GRACE_MS = 1_000;
 
 const OUTCOME_SIDES: Record<string, Side> = { Home: 'home', Away: 'away', Over: 'over', Under: 'under' };
 
+/**
+ * The league category holding each group of player props (ids from the league's category list, which
+ * every snapshot carries: "Passing Props", "Rushing Props", "Receiving Props", "TD Scorers"). One read of
+ * `events/{id}/categories/{category}` returns every subcategory's markets for that game.
+ */
+const PROP_CATEGORIES: Record<PropGroup, string> = { passing: '1000', rushing: '1001', receiving: '1342', touchdowns: '1003' };
+/**
+ * DK market types we read, as named on 2026-10-23. Milestone ladders ("Passing Yards Milestones") and
+ * period markets ("Passing Yards O/U - 1st Half") have other names, so they are left out by construction.
+ */
+const DK_PROP_STATS: Record<string, PropStat> = {
+  'Passing Yards O/U': 'pass_yds',
+  'Passing Touchdowns O/U': 'pass_tds',
+  'Passing Completions O/U': 'pass_cmp',
+  'Passing Attempts O/U': 'pass_att',
+  'Interceptions Thrown O/U': 'pass_int',
+  'Passing + Rushing Yards O/U': 'pass_rush_yds',
+  'Longest Passing Completion O/U': 'pass_long',
+  'Rushing Yards O/U': 'rush_yds',
+  'Rushing Attempts O/U': 'rush_att',
+  'Rushing + Receiving Yards O/U': 'rush_rec_yds',
+  'Longest Rush O/U': 'rush_long',
+  'Receiving Yards O/U': 'rec_yds',
+  'Receptions O/U': 'receptions',
+  'Longest Reception O/U': 'rec_long',
+  'Anytime Touchdown Scorer': 'td_anytime',
+  '1st Touchdown Scorer': 'td_first',
+  'Last Touchdown Scorer': 'td_last',
+  'Score 2 or More': 'td_2plus',
+};
+/** A prop selection's `participants[].venueRole`. */
+const PLAYER_SIDES: Record<string, 'away' | 'home'> = { AwayPlayer: 'away', HomePlayer: 'home' };
+/** Headers DK's own web client sends on REST reads. */
+const REST_HEADERS = {
+  'User-Agent': BROWSER_UA,
+  Accept: 'application/json, text/plain, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Origin: 'https://sportsbook.draftkings.com',
+  Referer: 'https://sportsbook.draftkings.com/',
+};
+
 interface DkParticipant {
   name?: string;
+  /** Events: Home / Away. Prop selections: AwayPlayer / HomePlayer. */
   venueRole?: string;
+  /** Prop selections: "Player" for a player (team D/ST and "No Touchdown Scorer" have none). */
+  type?: string;
   metadata?: { shortName?: string; rosettaTeamName?: string };
 }
 interface DkEvent {
@@ -133,6 +180,8 @@ interface DkMarket {
   name?: string;
   marketType?: { name?: string; betOfferTypeId?: number };
   isSuspended?: boolean;
+  /** Prop markets carry "PlayerProps". */
+  tags?: string[];
 }
 interface DkSelection {
   id: string;
@@ -144,6 +193,14 @@ interface DkSelection {
   outcomeType?: string;
   main?: boolean;
   tags?: string[];
+  /** Player props: the player. */
+  participants?: DkParticipant[];
+}
+/** `events/{id}/categories/{category}`: the game's event and its markets in that category. */
+interface DkPropsPage {
+  events?: { id?: string }[];
+  markets?: DkMarket[];
+  selections?: DkSelection[];
 }
 interface DkSubscriptionPartial {
   entity?: string;
@@ -228,11 +285,17 @@ export class DraftKingsConnector extends BookConnector {
   readonly book = 'draftkings' as const;
 
   private readonly siteName: string;
+  /** DK's sportscontent REST API for this site; `restUrl` (the game-lines snapshot) and props hang off it. */
+  private readonly restBase: string;
   private readonly restUrl: string;
   private readonly wsUrl: string;
   private readonly reconcileIntervalMs: number;
   private readonly wsProxyUrl: string | undefined;
   private readonly http: Dispatcher;
+  /** Player props' own connection pool, so slow props reads can't queue the snapshot and reconciles. */
+  private readonly propsHttp: Dispatcher;
+  /** Props groups whose page listed player props of no type we read: logged once. */
+  private readonly warnedPropTypes = new Set<PropGroup>();
   private readonly leagueId: string;
   private readonly subcategoryId: string;
 
@@ -316,13 +379,13 @@ export class DraftKingsConnector extends BookConnector {
     this.siteName = `dk${country}${state}`;
     this.leagueId = opts.leagueId ?? NFL_LEAGUE;
     this.subcategoryId = opts.subcategoryId ?? GAME_LINES_SUBCATEGORY;
-    this.restUrl =
-      opts.restUrl ??
-      `https://sportsbook-nash.draftkings.com/api/sportscontent/${this.siteName}/v1/leagues/${this.leagueId}/categories/${GAME_LINES_CATEGORY}/subcategories/${this.subcategoryId}`;
+    this.restBase = `https://sportsbook-nash.draftkings.com/api/sportscontent/${this.siteName}/v1`;
+    this.restUrl = opts.restUrl ?? `${this.restBase}/leagues/${this.leagueId}/categories/${GAME_LINES_CATEGORY}/subcategories/${this.subcategoryId}`;
     this.wsUrl = opts.wsUrl ?? `wss://sportsbook-ws-${country}-${state}.draftkings.com/websocket?format=json&locale=en`;
     this.reconcileIntervalMs = opts.reconcileIntervalMs ?? 60_000;
     this.wsProxyUrl = opts.wsProxyUrl ?? opts.proxyUrl;
     this.http = createDispatcher(opts.restProxyUrl ?? opts.proxyUrl);
+    this.propsHttp = createDispatcher(opts.restProxyUrl ?? opts.proxyUrl);
     this.tokenMode = opts.tokenMode ?? 'default';
     this.tokenUrl = opts.tokenUrl ?? `https://gaming-${country}-${state}.draftkings.com/api/wager/v1/generateAnonymousEnterpriseJWT`;
   }
@@ -660,23 +723,31 @@ export class DraftKingsConnector extends BookConnector {
   }
 
   private async fetchSnapshot(): Promise<JsonResponse<DkSnapshot>> {
-    const res = await requestJson<Partial<DkSnapshot>>(this.restUrl, {
-      dispatcher: this.http,
-      timeoutMs: SNAPSHOT_TIMEOUT_MS,
-      headers: {
-        'User-Agent': BROWSER_UA,
-        Accept: 'application/json, text/plain, */*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        Origin: 'https://sportsbook.draftkings.com',
-        Referer: 'https://sportsbook.draftkings.com/',
-      },
-    });
+    const res = await requestJson<Partial<DkSnapshot>>(this.restUrl, { dispatcher: this.http, timeoutMs: SNAPSHOT_TIMEOUT_MS, headers: REST_HEADERS });
     const d = res.data;
     // A body without the three entity lists is an error page or a partial read, never a real empty board.
     if (!d || !Array.isArray(d.events) || !Array.isArray(d.markets) || !Array.isArray(d.selections)) {
       throw new Error('malformed snapshot (missing events/markets/selections)');
     }
     return res as JsonResponse<DkSnapshot>;
+  }
+
+  /**
+   * One group of player props for a DK event: its category page, one REST read on the same client (and
+   * proxy) as the snapshot. DK's REST is edge-cached for about 1 s, so these are current prices.
+   */
+  async fetchProps(game: BookGame, group: PropGroup): Promise<BookProp[]> {
+    const url = `${this.restBase}/events/${encodeURIComponent(game.bookEventId)}/categories/${PROP_CATEGORIES[group]}`;
+    const res = await requestJson<DkPropsPage>(url, { dispatcher: this.propsHttp, timeoutMs: SNAPSHOT_TIMEOUT_MS, headers: REST_HEADERS });
+    const props = parseDkProps(res.data, game.bookEventId);
+    // Player-prop markets but none of a type we read: DK has likely renamed them, which would otherwise
+    // look exactly like a game with no props posted.
+    const unread = (res.data.markets ?? []).filter((m) => m.tags?.includes('PlayerProps'));
+    if (!props.length && unread.length && !this.warnedPropTypes.has(group)) {
+      this.warnedPropTypes.add(group);
+      this.log(`props: the ${group} page lists ${unread.length} player-prop markets, none of a type we read (${[...new Set(unread.map((m) => m.marketType?.name))].slice(0, 5).join(', ')})`);
+    }
+    return props;
   }
 
   /** Periodic full re-read. Anything a frame touched recently is fresher than the snapshot and is kept. */
@@ -897,7 +968,7 @@ export class DraftKingsConnector extends BookConnector {
       for (const side of MARKET_SIDES[type]) {
         const ref = { gameKey: game.gameKey, market: type, side };
         const s = bySide.get(side);
-        const american = s ? (parseAmerican(s.v.displayOdds?.american) ?? (s.v.trueOdds !== undefined ? decimalToAmerican(s.v.trueOdds) : null)) : null;
+        const american = s ? selectionAmerican(s.v) : null;
         if (!s || american === null) {
           if (this.hasQuote(ref) && !this.pendingRemovals.has(quoteKey(ref))) this.pendingRemovals.set(quoteKey(ref), { ref, marketId, at: receivedAt });
           continue;
@@ -1054,8 +1125,66 @@ function parseTime(value: string | undefined): number | null {
   return Number.isFinite(t) ? t : null;
 }
 
-/** 1 for the selection DK marks as its main line, else 0: preferred when old and new lines briefly coexist. */
-const rank = (s: Tracked<DkSelection>) => (s.v.main === true || s.v.tags?.includes('MainPointLine') ? 1 : 0);
+/** The selection DK marks as its main line. */
+const isMain = (s: DkSelection) => s.main === true || s.tags?.includes('MainPointLine') === true;
+/** 1 for DK's main line, else 0: preferred when old and new lines briefly coexist. */
+const rank = (s: Tracked<DkSelection>) => (isMain(s.v) ? 1 : 0);
+/** The displayed price (DK writes U+2212 minus), else one derived from the true decimal odds. */
+const selectionAmerican = (s: DkSelection) => parseAmerican(s.displayOdds?.american) ?? (s.trueOdds !== undefined ? decimalToAmerican(s.trueOdds) : null);
+
+/**
+ * One game's player props from a DK category page: full-game over/unders on DK's main line, and scorer
+ * markets. A game with no props posted yet comes back with its event and no `markets`/`selections` at all
+ * (checked 2026-10-23); a page without the game's event, or with markets but no selections, is an error
+ * page or a partial read and throws, so it can't pass for "no props".
+ */
+export function parseDkProps(page: DkPropsPage, eventId: string): BookProp[] {
+  if (!Array.isArray(page?.events) || !page.events.some((e) => e.id === eventId)) throw new Error(`malformed props page (event ${eventId} missing)`);
+  if (page.markets?.length && !Array.isArray(page.selections)) throw new Error('malformed props page (markets without selections)');
+  const byMarket = new Map<string, DkSelection[]>();
+  for (const s of page.selections ?? []) {
+    if (!s.marketId) continue;
+    const list = byMarket.get(s.marketId) ?? [];
+    list.push(s);
+    byMarket.set(s.marketId, list);
+  }
+  // The selection's player and their side of the game. Scorer markets also list "KC Chiefs D/ST" and "No
+  // Touchdown Scorer", which have no player participant and are left out.
+  const playerOf = (s: DkSelection | undefined) => {
+    const p = s?.participants?.find((x) => x.type === 'Player');
+    return p?.name ? { player: p.name.trim(), team: PLAYER_SIDES[p.venueRole ?? ''] ?? null } : null;
+  };
+  const out: BookProp[] = [];
+  for (const m of page.markets ?? []) {
+    const stat = DK_PROP_STATS[m.marketType?.name ?? ''];
+    if (!stat) continue;
+    const sels = byMarket.get(m.id) ?? [];
+    // REST omits `isSuspended` when false.
+    const suspended = m.isSuspended === true;
+    if (PROP_STATS[stat].kind === 'yes') {
+      for (const s of sels) {
+        const who = playerOf(s);
+        const american = selectionAmerican(s);
+        if (who !== null && american !== null) out.push({ stat, ...who, line: null, prices: { yes: american }, suspended });
+      }
+      continue;
+    }
+    // One line per market today; should DK carry more, its main line wins, as for game lines.
+    const pick = (outcome: string) => {
+      const side = sels.filter((s) => s.outcomeType === outcome);
+      return side.find(isMain) ?? side[0];
+    };
+    const over = pick('Over');
+    const under = pick('Under');
+    const line = over?.points ?? under?.points;
+    // Mid-move the two sides can briefly quote different lines; the next read settles it.
+    if (line === undefined || line === null || !Number.isFinite(line) || (over && under && over.points !== under.points)) continue;
+    const who = playerOf(over ?? under);
+    const sides = ouPrices(over ? selectionAmerican(over) : null, under ? selectionAmerican(under) : null);
+    if (who !== null && sides !== null) out.push({ stat, ...who, line, prices: sides, suspended });
+  }
+  return out;
+}
 const newBatch = (): Batch => ({ events: new Set(), markets: new Set(), removedQuotes: [] });
 
 /** Add `id` to the set stored under `key` (creating it). */

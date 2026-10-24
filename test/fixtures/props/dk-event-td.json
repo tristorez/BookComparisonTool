@@ -1,0 +1,712 @@
+{
+ "events": [
+  {
+   "id": "34118035",
+   "name": "KC Chiefs @ SEA Seahawks",
+   "startEventDate": "2026-10-26T00:20:00.0000000Z",
+   "status": "NOT_STARTED",
+   "participants": [
+    {
+     "id": "18471",
+     "name": "SEA Seahawks",
+     "venueRole": "Home",
+     "type": "Team"
+    },
+    {
+     "id": "18379",
+     "name": "KC Chiefs",
+     "venueRole": "Away",
+     "type": "Team"
+    }
+   ]
+  }
+ ],
+ "markets": [
+  {
+   "id": "381330552",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "Anytime TD Scorer - 1st Half",
+   "subcategoryId": "20382",
+   "marketType": {
+    "id": "11024",
+    "betOfferTypeId": 0,
+    "name": "Anytime Touchdown Scorer - 1st Half"
+   },
+   "sortOrder": 1552,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "IgnoreSortOrderOnPush",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|11024",
+   "componentMapping": {
+    "primary": 18,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  },
+  {
+   "id": "380442885",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "Anytime TD Scorer",
+   "subcategoryId": "12438",
+   "marketType": {
+    "id": "11019",
+    "betOfferTypeId": 0,
+    "name": "Anytime Touchdown Scorer"
+   },
+   "sortOrder": 1885,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "EarlyExit",
+    "EarlyExitPlus",
+    "FeaturedSubcategory",
+    "IgnoreSortOrderOnPush",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|11019",
+   "componentMapping": {
+    "primary": 18,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  },
+  {
+   "id": "357446699",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "First TD Scorer",
+   "subcategoryId": "12438",
+   "marketType": {
+    "id": "11018",
+    "betOfferTypeId": 0,
+    "name": "1st Touchdown Scorer"
+   },
+   "sortOrder": 2699,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "EarlyExit",
+    "EarlyExitPlus",
+    "FeaturedSubcategory",
+    "IgnoreSortOrderOnPush",
+    "OSB",
+    "PlayerProps"
+   ],
+   "correlatedId": "34118035|11018",
+   "componentMapping": {
+    "primary": 18,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  },
+  {
+   "id": "381698113",
+   "eventId": "34118035",
+   "sportId": "3",
+   "leagueId": "88808",
+   "name": "Jaxon Smith-Njigba or Kenneth Walker III - Either Player to Score 1st TD",
+   "subcategoryId": "18514",
+   "marketType": {
+    "id": "15782",
+    "betOfferTypeId": 0,
+    "name": "Either Player to Score 1st Touchdown"
+   },
+   "sortOrder": 1,
+   "tags": [
+    "SGP",
+    "YourBetEligible",
+    "Cashout",
+    "EarlyExit",
+    "EarlyExitPlus",
+    "IgnoreSortOrderOnPush",
+    "OSB"
+   ],
+   "correlatedId": "34118035|15782|2:100635|2:113172",
+   "blurbId": "cd2f44a7-78bf-4cfc-8c93-bb5bab91f15d",
+   "componentMapping": {
+    "primary": 29,
+    "fallback": 0
+   },
+   "dynamicMetadata": {}
+  }
+ ],
+ "selections": [
+  {
+   "id": "0QA381330552#2330148921_13L88808Q1-384743065Q20",
+   "marketId": "381330552",
+   "label": "Kenneth Walker III",
+   "displayOdds": {
+    "american": "+190",
+    "decimal": "2.90",
+    "fractional": "19/10",
+    "percentage": "34%",
+    "multiplier": "2.90x"
+   },
+   "trueOdds": 2.9,
+   "outcomeType": "ToScoreAnyTime",
+   "participants": [
+    {
+     "id": "640873",
+     "name": "Kenneth Walker III",
+     "type": "Player",
+     "seoIdentifier": "Kenneth Walker III",
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "113172"
+     }
+    }
+   ],
+   "sortOrder": 3002900,
+   "tags": [
+    "SGP",
+    "1stFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA381330552#2330149430_13L88808Q12105195447Q20",
+   "marketId": "381330552",
+   "label": "Jaxon Smith-Njigba",
+   "displayOdds": {
+    "american": "+270",
+    "decimal": "3.70",
+    "fractional": "27/10",
+    "percentage": "27%",
+    "multiplier": "3.70x"
+   },
+   "trueOdds": 3.7,
+   "outcomeType": "ToScoreAnyTime",
+   "participants": [
+    {
+     "id": "686189",
+     "name": "Jaxon Smith-Njigba",
+     "type": "Player",
+     "seoIdentifier": "Jaxon Smith-Njigba",
+     "venueRole": "HomePlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "100635"
+     }
+    }
+   ],
+   "sortOrder": 3003700,
+   "tags": [
+    "SGP",
+    "1stFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA381330552#2330149431_13L88808Q1-360291150Q20",
+   "marketId": "381330552",
+   "label": "Zach Charbonnet",
+   "displayOdds": {
+    "american": "+285",
+    "decimal": "3.85",
+    "fractional": "57/20",
+    "percentage": "25%",
+    "multiplier": "3.85x"
+   },
+   "trueOdds": 3.85,
+   "outcomeType": "ToScoreAnyTime",
+   "participants": [
+    {
+     "id": "706532",
+     "name": "Zach Charbonnet",
+     "type": "Player",
+     "seoIdentifier": "Zach Charbonnet",
+     "venueRole": "HomePlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "126008"
+     }
+    }
+   ],
+   "sortOrder": 3003850,
+   "tags": [
+    "SGP",
+    "2ndFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA381330552#2330148923_13L88808Q1849414618Q20",
+   "marketId": "381330552",
+   "label": "Travis Kelce",
+   "displayOdds": {
+    "american": "+475",
+    "decimal": "5.75",
+    "fractional": "19/4",
+    "percentage": "17%",
+    "multiplier": "5.75x"
+   },
+   "trueOdds": 5.75,
+   "outcomeType": "ToScoreAnyTime",
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 3005750,
+   "tags": [
+    "SGP",
+    "2ndFavorite",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA381330552#2330149445_14L88808Q11062032055Q20",
+   "marketId": "381330552",
+   "label": "KC Chiefs D/ST",
+   "displayOdds": {
+    "american": "+1000",
+    "decimal": "11.00",
+    "fractional": "10/1",
+    "percentage": "9.0%",
+    "multiplier": "11.00x"
+   },
+   "trueOdds": 11,
+   "outcomeType": "ToScoreAnyTime",
+   "sortOrder": 3011000,
+   "tags": [
+    "SGP",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA381698113#2331677765_13L88808Q1-355294110Q20",
+   "marketId": "381698113",
+   "label": "Yes",
+   "displayOdds": {
+    "american": "+220",
+    "decimal": "3.20",
+    "fractional": "11/5",
+    "percentage": "31%",
+    "multiplier": "3.20x"
+   },
+   "trueOdds": 3.2,
+   "outcomeType": "Yes",
+   "sortOrder": 10,
+   "tags": [
+    "SGP",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA381698113#2331677782_13L88808Q11573667620Q20",
+   "marketId": "381698113",
+   "label": "No",
+   "displayOdds": {
+    "american": "−320",
+    "decimal": "1.31",
+    "fractional": "5/16",
+    "percentage": "76%",
+    "multiplier": "1.31x"
+   },
+   "trueOdds": 1.3125,
+   "outcomeType": "No",
+   "sortOrder": 20,
+   "tags": [
+    "SGP",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA357446699#2326727465_13L88808Q11711771981Q20",
+   "marketId": "357446699",
+   "label": "Kenneth Walker III",
+   "displayOdds": {
+    "american": "+450",
+    "decimal": "5.50",
+    "fractional": "9/2",
+    "percentage": "18%",
+    "multiplier": "5.50x"
+   },
+   "trueOdds": 5.5,
+   "outcomeType": "ToScoreFirst",
+   "participants": [
+    {
+     "id": "640873",
+     "name": "Kenneth Walker III",
+     "type": "Player",
+     "seoIdentifier": "Kenneth Walker III",
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "113172"
+     }
+    }
+   ],
+   "sortOrder": 1005500,
+   "tags": [
+    "SGP",
+    "1stFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA357446699#2326726463_13L88808Q11737466066Q20",
+   "marketId": "357446699",
+   "label": "Zach Charbonnet",
+   "displayOdds": {
+    "american": "+600",
+    "decimal": "7.00",
+    "fractional": "6/1",
+    "percentage": "14%",
+    "multiplier": "7.00x"
+   },
+   "trueOdds": 7,
+   "outcomeType": "ToScoreFirst",
+   "participants": [
+    {
+     "id": "706532",
+     "name": "Zach Charbonnet",
+     "type": "Player",
+     "seoIdentifier": "Zach Charbonnet",
+     "venueRole": "HomePlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "126008"
+     }
+    }
+   ],
+   "sortOrder": 1007000,
+   "tags": [
+    "SGP",
+    "1stFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA357446699#2326726386_13L88808Q1831244855Q20",
+   "marketId": "357446699",
+   "label": "Jaxon Smith-Njigba",
+   "displayOdds": {
+    "american": "+650",
+    "decimal": "7.50",
+    "fractional": "13/2",
+    "percentage": "13%",
+    "multiplier": "7.50x"
+   },
+   "trueOdds": 7.5,
+   "outcomeType": "ToScoreFirst",
+   "participants": [
+    {
+     "id": "686189",
+     "name": "Jaxon Smith-Njigba",
+     "type": "Player",
+     "seoIdentifier": "Jaxon Smith-Njigba",
+     "venueRole": "HomePlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "100635"
+     }
+    }
+   ],
+   "sortOrder": 1007500,
+   "tags": [
+    "SGP",
+    "2ndFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA357446699#2326727526_13L88808Q1-1767077256Q20",
+   "marketId": "357446699",
+   "label": "Travis Kelce",
+   "displayOdds": {
+    "american": "+1300",
+    "decimal": "14.00",
+    "fractional": "13/1",
+    "percentage": "7.1%",
+    "multiplier": "14.00x"
+   },
+   "trueOdds": 14,
+   "outcomeType": "ToScoreFirst",
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 1014000,
+   "tags": [
+    "SGP",
+    "3rdFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA357446699#2326728128_14L88808Q1-1656434621Q20",
+   "marketId": "357446699",
+   "label": "KC Chiefs D/ST",
+   "displayOdds": {
+    "american": "+2500",
+    "decimal": "26.00",
+    "fractional": "25/1",
+    "percentage": "3.8%",
+    "multiplier": "26.00x"
+   },
+   "trueOdds": 26,
+   "outcomeType": "ToScoreFirst",
+   "sortOrder": 1026000,
+   "tags": [
+    "SGP",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA357446699#2235245681_13L88808Q1-1777442974Q20",
+   "marketId": "357446699",
+   "label": "No Touchdown Scorer",
+   "displayOdds": {
+    "american": "+8000",
+    "decimal": "81.00",
+    "fractional": "80/1",
+    "percentage": "1.2%",
+    "multiplier": "81.00x"
+   },
+   "trueOdds": 81,
+   "outcomeType": "ToScoreFirst",
+   "sortOrder": 1081000,
+   "tags": [
+    "SGP",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380442885#2326739457_13L88808Q11336808573Q20",
+   "marketId": "380442885",
+   "label": "Kenneth Walker III",
+   "displayOdds": {
+    "american": "−130",
+    "decimal": "1.76",
+    "fractional": "10/13",
+    "percentage": "56%",
+    "multiplier": "1.76x"
+   },
+   "trueOdds": 1.76923077,
+   "outcomeType": "ToScoreAnyTime",
+   "participants": [
+    {
+     "id": "640873",
+     "name": "Kenneth Walker III",
+     "type": "Player",
+     "seoIdentifier": "Kenneth Walker III",
+     "statistic": {
+      "prefix": "2026 TD",
+      "value": 8,
+      "stringValue": "8.000",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "113172"
+     }
+    }
+   ],
+   "sortOrder": 3001760,
+   "tags": [
+    "SGP",
+    "1stFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380442885#2326739443_13L88808Q11896367839Q20",
+   "marketId": "380442885",
+   "label": "Jaxon Smith-Njigba",
+   "displayOdds": {
+    "american": "+120",
+    "decimal": "2.20",
+    "fractional": "6/5",
+    "percentage": "45%",
+    "multiplier": "2.20x"
+   },
+   "trueOdds": 2.2,
+   "outcomeType": "ToScoreAnyTime",
+   "participants": [
+    {
+     "id": "686189",
+     "name": "Jaxon Smith-Njigba",
+     "type": "Player",
+     "seoIdentifier": "Jaxon Smith-Njigba",
+     "statistic": {
+      "prefix": "2026 TD",
+      "value": 7,
+      "stringValue": "7.000",
+      "showRecentStats": true
+     },
+     "venueRole": "HomePlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "100635"
+     }
+    }
+   ],
+   "sortOrder": 3002200,
+   "tags": [
+    "SGP",
+    "1stFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380442885#2326739445_13L88808Q11652444548Q20",
+   "marketId": "380442885",
+   "label": "Zach Charbonnet",
+   "displayOdds": {
+    "american": "+125",
+    "decimal": "2.25",
+    "fractional": "5/4",
+    "percentage": "44%",
+    "multiplier": "2.25x"
+   },
+   "trueOdds": 2.25,
+   "outcomeType": "ToScoreAnyTime",
+   "participants": [
+    {
+     "id": "706532",
+     "name": "Zach Charbonnet",
+     "type": "Player",
+     "seoIdentifier": "Zach Charbonnet",
+     "venueRole": "HomePlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "126008"
+     }
+    }
+   ],
+   "sortOrder": 3002250,
+   "tags": [
+    "SGP",
+    "2ndFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380442885#2326739459_13L88808Q1-511040682Q20",
+   "marketId": "380442885",
+   "label": "Travis Kelce",
+   "displayOdds": {
+    "american": "+215",
+    "decimal": "3.15",
+    "fractional": "43/20",
+    "percentage": "31%",
+    "multiplier": "3.15x"
+   },
+   "trueOdds": 3.15,
+   "outcomeType": "ToScoreAnyTime",
+   "participants": [
+    {
+     "id": "11557",
+     "name": "Travis Kelce",
+     "type": "Player",
+     "seoIdentifier": "Travis Kelce",
+     "statistic": {
+      "prefix": "2026 TD",
+      "value": 2,
+      "stringValue": "2.000",
+      "showRecentStats": true
+     },
+     "venueRole": "AwayPlayer",
+     "isNationalTeam": false,
+     "metadata": {
+      "sdid": "54973"
+     }
+    }
+   ],
+   "sortOrder": 3003150,
+   "tags": [
+    "SGP",
+    "2ndFavorite",
+    "EarlyExitPlus",
+    "EarlyExit",
+    "OSB"
+   ],
+   "metadata": {}
+  },
+  {
+   "id": "0QA380442885#2326739424_14L88808Q1-192503117Q20",
+   "marketId": "380442885",
+   "label": "KC Chiefs D/ST",
+   "displayOdds": {
+    "american": "+550",
+    "decimal": "6.50",
+    "fractional": "11/2",
+    "percentage": "15%",
+    "multiplier": "6.50x"
+   },
+   "trueOdds": 6.5,
+   "outcomeType": "ToScoreAnyTime",
+   "sortOrder": 3006500,
+   "tags": [
+    "SGP",
+    "OSB"
+   ],
+   "metadata": {}
+  }
+ ]
+}

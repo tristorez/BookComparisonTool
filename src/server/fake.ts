@@ -8,9 +8,10 @@
  * Box A and Box B do for a real one, and a process that starts late snapshots what the others hold.
  */
 import { gameKey, NFL_TEAMS } from '../books/teams.js';
-import { BookConnector, type BookGame, type Quote, type QuoteRef } from '../books/types.js';
+import { BookConnector, type BookGame, type BookProp, type Quote, type QuoteRef } from '../books/types.js';
 import { BOOK_IDS, MARKET_SIDES, type BookId, type Channel, type MarketType, type Side } from '../shared/domain.js';
 import { americanToDecimal } from '../shared/odds.js';
+import { PROP_STATS, type PropGroup, type PropStat } from '../shared/props.js';
 import type { BookSpec } from './registry.js';
 
 export type FakeMode = 'normal' | 'fail' | 'freeze' | 'garbage' | 'massRemove';
@@ -40,6 +41,34 @@ const drawsAt = (seed: number, tick: number) => mulberry32(Math.imul(seed, 0x9e3
 
 /** How far back a starting process looks for each market's latest change before using its opening. */
 const LOOKBACK_TICKS = 20_000;
+
+/**
+ * A well-mixed 32-bit seed from a string: FNV-1a, then murmur3's finalizer. Without the finalizer,
+ * mulberry32 seeded per prop via `drawsAt` gave nearly the same second draw for every prop in a minute.
+ */
+function hashString(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/** Synthetic roster for `fetchProps`: each role's typical over/under lines and its fair chance of an anytime TD. */
+const FAKE_ROSTER: readonly { role: string; lines: Partial<Record<PropStat, number>>; td: number }[] = [
+  { role: 'QB', lines: { pass_yds: 235, pass_tds: 1.5, pass_cmp: 21, pass_att: 33, pass_int: 0.5, rush_yds: 14 }, td: 0.12 },
+  { role: 'RB', lines: { rush_yds: 64, rush_att: 15, rush_rec_yds: 82, receptions: 2.5 }, td: 0.45 },
+  { role: 'WR1', lines: { rec_yds: 66, receptions: 5.5 }, td: 0.38 },
+  { role: 'WR2', lines: { rec_yds: 44, receptions: 3.5 }, td: 0.25 },
+  { role: 'TE', lines: { rec_yds: 34, receptions: 3.5 }, td: 0.27 },
+];
+/** Each scorer market's fair chance, from the anytime chance `p`. */
+const FAKE_TD_ODDS: Partial<Record<PropStat, (p: number) => number>> = {
+  td_anytime: (p) => p,
+  td_first: (p) => p * 0.2,
+  td_last: (p) => p * 0.2,
+  td_2plus: (p) => p * p * 0.35,
+};
 
 interface FakeMarket {
   line: number | null;
@@ -81,6 +110,7 @@ export class FakeConnector extends BookConnector {
   private readonly bookTimeResolutionMs: number;
   private readonly opts: Required<FakeOptions>;
   private readonly tickMs: number;
+  private readonly bookIndex: number;
   private readonly bookSeed: number;
   /** Misbehavior is per process, so it has its own generator. */
   private readonly glitch: () => number;
@@ -105,7 +135,8 @@ export class FakeConnector extends BookConnector {
     this.opts = { seed: 7, ratePerSec: 4, mode: 'normal', games: 8, troubleAfterMs: 15_000, ...opts };
     this.tickMs = Math.max(10, Math.round(1000 / this.opts.ratePerSec));
     // Every book shares the slate (same seed) but draws its own prices, offset by its place in BOOK_IDS.
-    this.bookSeed = this.opts.seed * 31 + BOOK_IDS.indexOf(book) + 1;
+    this.bookIndex = BOOK_IDS.indexOf(book);
+    this.bookSeed = this.opts.seed * 31 + this.bookIndex + 1;
     this.glitch = mulberry32(this.bookSeed + 0x5bd1e995);
     const slate = mulberry32(this.opts.seed);
     // Kickoffs hang off the UTC day, so processes started the same day agree on every game.
@@ -158,6 +189,52 @@ export class FakeConnector extends BookConnector {
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
     this.setStatus('stopped');
+  }
+
+  /**
+   * Synthetic player props for one of this book's games, shaped like the real books': a few players a
+   * team, lines shared by every book (seed) and nudged per book, prices redrawn each minute so a read can
+   * move, and books after the first skip some props, as FanDuel lists fewer stats than DraftKings.
+   */
+  async fetchProps(game: BookGame, group: PropGroup): Promise<BookProp[]> {
+    const minute = Math.floor(Date.now() / 60_000);
+    const out: BookProp[] = [];
+    for (const team of ['away', 'home'] as const) {
+      const nickname = NFL_TEAMS.find((t) => t.code === game[team])?.nickname ?? game[team];
+      for (const { role, lines, td } of FAKE_ROSTER) {
+        const player = `${nickname} ${role}`;
+        if (group === 'touchdowns') {
+          for (const [stat, odds] of Object.entries(FAKE_TD_ODDS) as [PropStat, (p: number) => number][]) {
+            const [shared, own] = this.propDraws(game, player, stat, minute);
+            if (own === null) continue;
+            const p = odds(td * (0.8 + shared() * 0.4)) * (0.95 + own() * 0.1);
+            out.push({ stat, player, team, line: null, prices: { yes: twoWay(p)[0] }, suspended: false });
+          }
+          continue;
+        }
+        for (const [stat, base] of Object.entries(lines) as [PropStat, number][]) {
+          if (PROP_STATS[stat].group !== group) continue;
+          const [shared, own] = this.propDraws(game, player, stat, minute);
+          if (own === null) continue;
+          // Lines drift a little by game and land on .5; on yardage a book is sometimes a yard off.
+          const nudge = base >= 10 && own() < 0.3 ? (own() < 0.5 ? -1 : 1) : 0;
+          const line = Math.floor(base * (0.85 + shared() * 0.3)) + 0.5 + nudge;
+          const [over, under] = twoWay(0.5 + (own() - 0.5) * 0.08);
+          out.push({ stat, player, team, line, prices: { over, under }, suspended: false });
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * One prop's draws: shared by every book (its level), and this book's own for the minute (its line and
+   * price), or null when this book doesn't list the prop. Books after the first skip a fixed quarter of them.
+   */
+  private propDraws(game: BookGame, player: string, stat: PropStat, minute: number): [shared: () => number, own: (() => number) | null] {
+    const prop = `${game.gameKey}|${player}|${stat}`;
+    const listed = this.bookIndex === 0 || mulberry32(hashString(`${this.bookSeed}|${prop}`))() >= 0.25;
+    return [mulberry32(hashString(`${this.opts.seed}|${prop}`)), listed ? mulberry32(hashString(`${this.bookSeed}|${minute}|${prop}`)) : null];
   }
 
   private troubled(mode: FakeMode): boolean {

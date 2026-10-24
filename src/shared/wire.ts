@@ -14,6 +14,7 @@
  * clock of the box that received the value first. All boxes are chrony-synced.
  */
 import type { BookId, Channel, ConnectionState, FeedId, MarketType, Side } from './domain.js';
+import type { PropGroup, PropSide, PropStat } from './props.js';
 
 /** `gameKey`, e.g. "2026-10-25:PIT@NO" (kickoff date in US Eastern + away@home). */
 export type GameKey = string;
@@ -202,4 +203,62 @@ export interface LatencyReport {
   offsetMs: number;
   offsetErrMs: number;
   samples: LatencySample[];
+}
+
+/**
+ * `GET /api/games/:game/props?group=`: one group of a game's player props, every book side by side.
+ * Read on demand for the game page and shared between viewers for a few seconds; not part of the stream.
+ */
+export interface PropsResponse {
+  game: GameKey;
+  group: PropGroup;
+  /** Board clock when the response was assembled. */
+  ts: number;
+  /** Every registry book, in registry order, with how its read went. */
+  books: WirePropsBook[];
+  /** One row per stat and player; stats in PROP_STATS order. */
+  rows: WirePropRow[];
+}
+
+export interface WirePropsBook {
+  book: BookId;
+  /**
+   * ok: read (it may list no props yet). error: the last read failed (`detail`); props from the last good
+   * read are still shown while recent. down: the book's feed is stale, so the board can't place the game
+   * there. unlisted: the book's feed is fine and doesn't list this game. unsupported: no props reader.
+   */
+  state: 'ok' | 'error' | 'down' | 'unlisted' | 'unsupported';
+  detail: string | null;
+  /** When the props shown for this book were read (board clock); null when none are shown. */
+  fetchedAt: number | null;
+}
+
+export interface WirePropOffer {
+  /** The book's line on an over/under stat; null on a scorer market. */
+  line: number | null;
+  /** American prices by side: over and under, or yes. */
+  prices: Partial<Record<PropSide, number>>;
+  /** Not open for betting at the book: shown, never best. */
+  suspended: boolean;
+}
+
+export interface WirePropBest {
+  /** Books offering the best price (several on a tie). */
+  books: BookId[];
+  /** False when the lines differ and the better line won (Best Price rule R4, `by line`). */
+  exact: boolean;
+}
+
+/** One player on one stat, with each book's offer. */
+export interface WirePropRow {
+  stat: PropStat;
+  /** `playerKey()` of the name (the first book's, where the books name the player differently): the cross-book join key. */
+  player: string;
+  /** Display name, as the first book in registry order writes it. */
+  name: string;
+  /** The player's side of the game, when a book says. */
+  team: 'away' | 'home' | null;
+  offers: Partial<Record<BookId, WirePropOffer>>;
+  /** Per side, only where two or more books offer it: a star means a comparison was made. */
+  best: Partial<Record<PropSide, WirePropBest>>;
 }

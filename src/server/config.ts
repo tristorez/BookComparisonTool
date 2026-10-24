@@ -32,6 +32,8 @@ export interface Config {
   feedToken: string | null;
   staleGraceMs: number;
   staleAfterMs: Partial<Record<BookId, number>>;
+  /** Board: how long one read of a game's player props (per book and group) is shared between viewers. */
+  propsTtlMs: number;
   /** Dev-only book/feed stop/start routes, to demo the stale UI. Refused in production. */
   chaos: boolean;
   webDir: string;
@@ -135,6 +137,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     feedToken,
     staleGraceMs: int(env, 'STALE_GRACE_MS', 5_000),
     staleAfterMs,
+    propsTtlMs: int(env, 'PROPS_TTL_MS', 10_000, 1_000),
     chaos,
     // fileURLToPath, not URL.pathname: the latter percent-encodes spaces in the install path.
     webDir: env.WEB_DIR ?? fileURLToPath(new URL('../web/', import.meta.url)),

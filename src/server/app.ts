@@ -4,16 +4,20 @@ import fastifyCompress from '@fastify/compress';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { BookId } from '../shared/domain.js';
+import { isPropGroup, PROP_GROUPS } from '../shared/props.js';
 import type { LatencyReport, TimeResponse } from '../shared/wire.js';
 import type { Board } from './board.js';
 import type { Config } from './config.js';
 import type { LatencyTracker } from './latency.js';
+import type { PropsService } from './props.js';
 import type { SseHub } from './sse.js';
 
 export interface AppDeps {
   board: Board;
   hub: SseHub;
   latency: LatencyTracker;
+  /** Player props for the game page (on demand; no route without it). */
+  props?: Pick<PropsService, 'get' | 'counters'>;
   cfg: Pick<Config, 'logLevel' | 'chaos' | 'webDir'>;
   /** Dev-only (CHAOS=1): stop/start one box's connector for a book, to demo the stale UI. */
   chaos?: (feed: string, book: BookId, action: 'stop' | 'start') => Promise<boolean>;
@@ -50,7 +54,19 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.get('/api/board', async () => board.snapshot());
   app.get('/api/time', async (): Promise<TimeResponse> => ({ now: Date.now() }));
   app.get('/api/health', async () => ({ ...board.health(), sse: hub.stats(), uptimeSec: Math.round(process.uptime()), ...deps.extraHealth?.() }));
-  app.get('/api/metrics', async () => ({ latency: latency.snapshot(), sse: hub.stats(), board: board.counters }));
+  app.get('/api/metrics', async () => ({ latency: latency.snapshot(), sse: hub.stats(), board: board.counters, props: deps.props?.counters ?? null }));
+
+  const props = deps.props;
+  if (props) {
+    app.get<{ Params: { game: string }; Querystring: { group?: string } }>('/api/games/:game/props', async (req, reply) => {
+      const group = req.query.group ?? PROP_GROUPS[0];
+      if (!isPropGroup(group)) return reply.code(400).send({ error: `group must be one of ${PROP_GROUPS.join(', ')}` });
+      const res = await props.get(req.params.game, group);
+      if (res === null) return reply.code(404).send({ error: 'game not on the board' });
+      // Reads are shared server-side for a few seconds; a browser cache would only add staleness on top.
+      return reply.header('cache-control', 'no-cache').send(res);
+    });
+  }
 
   // Fixed one-minute window per client IP; the map is simply cleared if it ever grows past 10k IPs.
   const beacons = new Map<string, { windowStart: number; count: number }>();

@@ -7,7 +7,8 @@ FanDuel, normalized into one model and pushed to the browser as lines move.
 - **Code:** https://github.com/tristorez/BookComparisonTool
 
 The board has a Best Price / DraftKings / FanDuel toggle, flashes prices that just changed, shows each
-book's freshness, and says so when a book's data is stale.
+book's freshness, and says so when a book's data is stale. Each game's page lines every book up side by
+side, with that game's player props from each book below the main lines.
 
 ---
 
@@ -19,7 +20,7 @@ npm ci
 npm run dev                  # board server (:8080, real books) + Vite UI (:5173)
 BOOKS=fake npm run dev       # synthetic books: no network, works anywhere
 VITE_API_TARGET=https://18-227-249-43.sslip.io npm run dev:remote   # local UI against the live server
-npm test                     # best price, merge, board, SSE + feed link, UI
+npm test                     # best price, merge, board, SSE + feed link, props, UI
 npm run build && npm start   # production: one Node process serves the API, the stream and the site
 ```
 
@@ -57,11 +58,24 @@ connectors also run alone: `npm run watch:fd`, `npm run watch:dk`, `npm run watc
   and an NFL push table (a 3-point margin is ~9% of games), and labelled `est.`. Where no model applies
   (totals, live spreads) the better line wins, labelled `by line`. The odds shown are always the book's
   actual odds.
+- **Player props (game page): read on demand, not streamed.** A game's page reads its props one tab at a
+  time (passing, rushing, receiving, touchdowns) through Box A's own connectors, each on its own HTTP
+  connection pool (`GET /api/games/:game/props?group=`, `src/server/props.ts`). Each read is shared by
+  every viewer for 10 s (`PROPS_TTL_MS`), so load on the books grows with the games being viewed, not
+  with viewers, and the main lines' stream, merge and connections are untouched. Players match by stat
+  and name, with punctuation and suffixes dropped ("A.J. Barner" is "AJ Barner"), and across a shortened
+  first name ("Cam Ward" is "Cameron Ward") when the team and surname leave no doubt. Best price per side
+  uses the rules above (same line: payout; different lines: `by line`) and is starred only where two or
+  more books offer it from a current read; a book whose reads fail keeps its last props on screen,
+  hatched and never starred. The section re-reads every 15 s while it is on screen and says how old each
+  book's props are; a book that refuses reads is left alone for a minute, doubling up to ten.
 
 **Books are pluggable. Adding one (a third, or ten) takes three edits, not a re-architecture:**
 1. `src/books/<book>.ts`: a `BookConnector` subclass that maps the book's feed into games and quotes.
    The base class keeps state, diffs changes, tracks status and emits latency samples. `teams.ts` lines
    its games up with the other books', and `http.ts` / `odds.ts` handle requests, backoff and price parsing.
+   Player props are optional: a connector with `fetchProps` gets its rows in the game page's props, and
+   one without it is shown as having no props feed.
 2. Its id in `BOOK_IDS` (`src/shared/domain.ts`).
 3. One entry in `src/server/registry.ts`: name, badge color, staleness, timestamp resolution and how to
    build the connector, plus its own settings in `config.ts` if it has any.
@@ -85,6 +99,17 @@ the uncached SMP price origin, per market, showing whichever channel has a new s
 boxes interleave their polls (+0.5 s) so each IP stays at one request per second. Rejected: prices from
 the cached board page (30–90 s old), polling at 5 s (~2.5 s average staleness), and push alone (it misses
 changes the poll catches).
+
+**Player props: one read per book per tab, when a game page asks.** DraftKings:
+`events/{id}/categories/{1000|1001|1342|1003}` returns every prop subcategory in that group for one
+game; we keep full-game over/unders on DK's main line and the scorer markets, and leave out milestone
+ladders and quarter/half props. A game with no props posted yet comes back with no markets at all.
+FanDuel: the event page's own tab (`passing-props`, `td-scorer-props`, …) names the markets, players and
+lines (re-read every 30 s), but it is CDN-cached like the board (15 s + 60 s stale-while-revalidate), so
+it is never used for prices: every read prices them from SMP, as for main lines, a market SMP leaves out
+is shown closed, and a read SMP can't price fails. Both books list team defenses among TD scorers; those
+are left out. In NJ, FanDuel lists fewer prop stats than DraftKings (no attempts, completions,
+interceptions or longest-play props), so those rows are DraftKings-only.
 
 **No logins, cookies or sessions.** FD's two keys are public (in its web bundle); if FD rotates them the
 connector re-reads the live bundle and adopts the working key (tested: live again in ~1.2 s). DK's socket
@@ -221,5 +246,8 @@ numbers.
   tooling helps: point an agent at a site's bundle and network capture and have it draft the connector
   and a replay fixture for human review. Toward ten, give each book its own egress (process or box), since
   each brings its own geo and bot-protection constraints.
-- Alternate lines and props (FD's event page carries `ALTERNATE_HANDICAP` / `ALTERNATE_TOTAL`; DK has
+- Alternate lines (FD's event page carries `ALTERNATE_HANDICAP` / `ALTERNATE_TOTAL`; DK has
   alternate-line subcategories).
+- Push for player props instead of a 15 s re-read: DK's category page hands back its own socket query
+  (`subscriptionPartials`), and FD's PIR subscription takes prop market ids, so live props could move as
+  fast as the main lines.
